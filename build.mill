@@ -1,0 +1,101 @@
+//| mill-version:1.0.5
+
+import mill._, scalalib._, scalafmt._
+
+object `package` extends ScalaModule with ScalafmtModule {
+  def scalaVersion = "2.13.14"
+  def spinalVersion = "1.13.0"
+
+  def mvnDeps = Seq(
+    mvn"com.github.spinalhdl::spinalhdl-core:$spinalVersion",
+    mvn"com.github.spinalhdl::spinalhdl-lib:$spinalVersion"
+  )
+
+  def scalacPluginMvnDeps = Seq(mvn"com.github.spinalhdl::spinalhdl-idsl-plugin:$spinalVersion")
+
+  def constraints =  Task.Source(moduleDir / "src" / "Colorlight-5A-75E.lpf")
+
+  trait SpinalHdlModule extends Module {
+    val moduleName = this.getClass.getSimpleName.stripSuffix("$")
+
+    def generate = Task {
+      compile()
+
+      os.proc(
+        "java",
+        "-cp",
+        runClasspath().map(_.path).mkString(":"),
+        s"lime.$moduleName"
+      ).call(cwd = Task.dest)
+
+      PathRef(Task.dest / s"$moduleName.v")
+    }
+
+    def synthesize = Task {
+      val verilogFile = generate().path
+      val synthFile = Task.dest / s"$moduleName.json"
+
+      os.proc(
+        "yosys",
+        "-q",
+        "-p",
+        s"synth_ecp5 -top $moduleName -json ${synthFile}",
+        verilogFile
+      ).call(cwd = Task.dest)
+
+      PathRef(synthFile)
+    }
+
+    def placeAndRoute = Task {
+      val synthFile = synthesize().path
+      val lpfFile = constraints().path
+      val cfgFile = Task.dest / s"$moduleName.cfg"
+
+      os.proc(
+        "nextpnr-ecp5",
+        "--25k",
+        "--package",
+        "CABGA256",
+        "--speed",
+        "6",
+        "--json",
+        synthFile,
+        "--textcfg",
+        cfgFile,
+        "--lpf",
+        lpfFile
+      ).call(cwd = Task.dest)
+
+      PathRef(cfgFile)
+    }
+
+    def bitstream = Task {
+      val cfgFile = placeAndRoute().path
+      val bitstreamFile = Task.dest / s"$moduleName.bit"
+
+      os.proc(
+        "ecppack",
+        cfgFile,
+        bitstreamFile
+      ).call(cwd = Task.dest)
+
+      println(s"Bitstream ready at $bitstreamFile")
+      PathRef(bitstreamFile)
+    }
+
+    def program(flash: mainargs.Flag) = Task.Command {
+      val bitstreamFile = bitstream().path
+
+      os.proc(
+        "sudo",
+        "openFPGALoader",
+        "--cable",
+        "dirtyJtag",
+        if (flash.value) Seq("--unprotect-flash", "-f") else Seq(),
+        bitstreamFile
+      ).call(cwd = Task.dest)
+    }
+  }
+
+  object Blink extends SpinalHdlModule {}
+}

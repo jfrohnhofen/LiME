@@ -1,0 +1,66 @@
+BLOCK RESETPATHS;
+BLOCK ASYNCPATHS;
+
+LOCATE COMP "clk" SITE "P6";
+LOCATE COMP "rst_n" SITE "R7";
+
+LOCATE COMP "led_n" SITE "T6";
+
+LOCATE COMP "uart_rx" SITE "R7";
+LOCATE COMP "uart_tx" SITE "C4";
+
+# PHY0
+LOCATE COMP "phy0_rgmii_tx_clk" SITE "L1";
+LOCATE COMP "phy0_rgmii_tx_data[0]" SITE "M2";
+LOCATE COMP "phy0_rgmii_tx_data[1]" SITE "M1";
+LOCATE COMP "phy0_rgmii_tx_data[2]" SITE "P1";
+LOCATE COMP "phy0_rgmii_tx_data[3]" SITE "R1";
+LOCATE COMP "phy0_rgmii_tx_ctl" SITE "L2";
+
+LOCATE COMP "phy0_rgmii_rx_clk" SITE "J1";
+LOCATE COMP "phy0_rgmii_rx_data[0]" SITE "K2";
+LOCATE COMP "phy0_rgmii_rx_data[1]" SITE "J3";
+LOCATE COMP "phy0_rgmii_rx_data[2]" SITE "K1";
+LOCATE COMP "phy0_rgmii_rx_data[3]" SITE "K3";
+LOCATE COMP "phy0_rgmii_rx_ctl" SITE "J2";
+
+# PHY1
+LOCATE COMP "phy1_rgmii_tx_clk" SITE "J16";
+LOCATE COMP "phy1_rgmii_tx_data[0]" SITE "K16";
+LOCATE COMP "phy1_rgmii_tx_data[1]" SITE "J15";
+LOCATE COMP "phy1_rgmii_tx_data[2]" SITE "J14";
+LOCATE COMP "phy1_rgmii_tx_data[3]" SITE "K15";
+LOCATE COMP "phy1_rgmii_tx_ctl" SITE "K14";
+
+LOCATE COMP "phy1_rgmii_rx_clk" SITE "M16";
+LOCATE COMP "phy1_rgmii_rx_data[0]" SITE "M15";
+LOCATE COMP "phy1_rgmii_rx_data[1]" SITE "R16";
+LOCATE COMP "phy1_rgmii_rx_data[2]" SITE "L15";
+LOCATE COMP "phy1_rgmii_rx_data[3]" SITE "L16";
+LOCATE COMP "phy1_rgmii_rx_ctl" SITE "P16";
+
+LOCATE COMP "hub75_leds[0]" SITE "C4";
+LOCATE COMP "hub75_leds[1]" SITE "F3";
+LOCATE COMP "hub75_leds[2]" SITE "G5";
+LOCATE COMP "hub75_leds[3]" SITE "C1";
+LOCATE COMP "hub75_leds[4]" SITE "G2";
+LOCATE COMP "hub75_leds[5]" SITE "L4";
+LOCATE COMP "hub75_leds[6]" SITE "T3";
+LOCATE COMP "hub75_leds[7]" SITE "P7";
+LOCATE COMP "hub75_leds[8]" SITE "P11";
+LOCATE COMP "hub75_leds[9]" SITE "R14";
+LOCATE COMP "hub75_leds[10]" SITE "B15";
+LOCATE COMP "hub75_leds[11]" SITE "P13";
+LOCATE COMP "hub75_leds[12]" SITE "H15";
+LOCATE COMP "hub75_leds[13]" SITE "E15";
+LOCATE COMP "hub75_leds[14]" SITE "J13";
+LOCATE COMP "hub75_leds[15]" SITE "G14";
+
+LOCATE COMP "hub75_addr[0]" SITE "N5";
+LOCATE COMP "hub75_addr[1]" SITE "N3";
+LOCATE COMP "hub75_addr[2]" SITE "P3";
+LOCATE COMP "hub75_addr[3]" SITE "P4";
+
+FREQUENCY PORT "clk" 25 MHz;
+FREQUENCY PORT "phy0_rgmii_rx_clk" 125 MHz;
+FREQUENCY PORT "phy1_rgmii_rx_clk" 125 MHz;
