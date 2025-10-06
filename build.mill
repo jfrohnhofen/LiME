@@ -13,7 +13,9 @@ object `package` extends ScalaModule with ScalafmtModule {
 
   def scalacPluginMvnDeps = Seq(mvn"com.github.spinalhdl::spinalhdl-idsl-plugin:$spinalVersion")
 
-  def constraints =  Task.Source(moduleDir / "src" / "Colorlight-5A-75E.lpf")
+  def sourceDir = moduleDir / "src"
+
+  def constraints = Task.Source(sourceDir / "Colorlight-5A-75E.lpf")
 
   trait SpinalHdlModule extends Module {
     val moduleName = this.getClass.getSimpleName.stripSuffix("$")
@@ -97,5 +99,13 @@ object `package` extends ScalaModule with ScalafmtModule {
     }
   }
 
-  object Blink extends SpinalHdlModule {}
+  trait VerilogModule extends SpinalHdlModule {
+    def verilogFile = Task.Source(sourceDir / s"$moduleName.v")
+
+    override def generate = Task {
+      verilogFile()
+    }
+  }
+
+  object LiME extends SpinalHdlModule {}
 }

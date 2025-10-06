@@ -5,8 +5,6 @@ LOCATE COMP "clk" SITE "P6";
 LOCATE COMP "rst_n" SITE "R7";
 
 LOCATE COMP "led_n" SITE "T6";
-
-LOCATE COMP "uart_rx" SITE "R7";
 LOCATE COMP "uart_tx" SITE "C4";
 
 # PHY0
