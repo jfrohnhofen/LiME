@@ -4,7 +4,7 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.com.uart._
 
-class LiME extends Component {
+class UartTest extends Component {
   val io = new Bundle {
     val uart_tx = out Bool ()
   }
@@ -50,13 +50,4 @@ class MemToStream extends Component {
   }
 }
 
-object LiME extends App {
-  SpinalConfig(
-    defaultConfigForClockDomains = ClockDomainConfig(
-      clockEdge = RISING,
-      resetKind = BOOT,
-      resetActiveLevel = LOW
-    ),
-    defaultClockDomainFrequency = FixedFrequency(25 MHz)
-  ).generateVerilog(new LiME())
-}
+object UartTest extends App { Config.generateVerilog(new UartTest()) }

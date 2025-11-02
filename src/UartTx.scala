@@ -16,6 +16,7 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
 
   val ticksPerBit = (ClockDomain.current.frequency.getValue / baudRate).toInt
   val counter = CounterFreeRun(ticksPerBit)
+  val stopCounter = CounterFreeRun(16*ticksPerBit)
   val bitIndex = Reg(UInt(log2Up(dataLength) bits))
   val payload = Reg(Bits(dataLength bit))
 
@@ -45,6 +46,7 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
       io.tx := payload(bitIndex)
       when(counter.willOverflow) {
         when(bitIndex === dataLength - 1) {
+          stopCounter.clear()
           state := STOP
         }
         bitIndex := bitIndex + 1
@@ -54,7 +56,7 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
 
     is(STOP) {
       io.tx := True
-      when(counter.willOverflow) {
+      when(stopCounter.willOverflow) {
         state := IDLE
       }
     }

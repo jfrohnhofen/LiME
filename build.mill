@@ -60,6 +60,7 @@ object `package` extends ScalaModule with ScalafmtModule {
         "CABGA256",
         "--speed",
         "6",
+        "--top", moduleName,
         "--json",
         synthFile,
         "--textcfg",
@@ -107,5 +108,7 @@ object `package` extends ScalaModule with ScalafmtModule {
     }
   }
 
-  object LiME extends SpinalHdlModule {}
+  object UartTest extends SpinalHdlModule {}
+
+  object RgmiiTest extends SpinalHdlModule {}
 }
