@@ -90,7 +90,6 @@ object `package` extends ScalaModule with ScalafmtModule {
       val bitstreamFile = bitstream().path
 
       os.proc(
-        "sudo",
         "openFPGALoader",
         "--cable",
         "dirtyJtag",
