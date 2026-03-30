@@ -16,7 +16,7 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
 
   val ticksPerBit = (ClockDomain.current.frequency.getValue / baudRate).toInt
   val counter = CounterFreeRun(ticksPerBit)
-  val stopCounter = CounterFreeRun(16*ticksPerBit)
+  val stopCounter = CounterFreeRun(16 * ticksPerBit)
   val bitIndex = Reg(UInt(log2Up(dataLength) bits))
   val payload = Reg(Bits(dataLength bit))
 

@@ -115,14 +115,12 @@ class RgmiiTest extends Component {
   val rgmii_rx = new RgmiiRx()
   rgmii_rx.io.rgmii := io.phy0_rgmii_rx
 
-
   val fifo = StreamFifoCC(
     dataType = Bits(8 bits),
     depth = 2048,
     pushClock = rgmii_rx.rxClockDomain,
     popClock = ClockDomain.current
   )
-
 
   new ClockingArea(rgmii_rx.rxClockDomain) {
     val sacn = new Sacn()
