@@ -92,20 +92,14 @@ object `package` extends ScalaModule with ScalafmtModule {
       os.proc(
         "openFPGALoader",
         "--cable",
-        "dirtyJtag",
+        "usb-blaster",
         if (flash.value) Seq("--unprotect-flash", "-f") else Seq(),
         bitstreamFile
       ).call(cwd = Task.dest)
     }
   }
 
-  trait VerilogModule extends SpinalHdlModule {
-    def verilogFile = Task.Source(sourceDir / s"$moduleName.v")
-
-    override def generate = Task {
-      verilogFile()
-    }
-  }
+  object LedBlink extends SpinalHdlModule {}
 
   object UartTest extends SpinalHdlModule {}
 
