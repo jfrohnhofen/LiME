@@ -6,7 +6,7 @@ import spinal.lib._
 
 class UartTxTest extends Component {
   val io = new Bundle {
-    val uart_tx = out Bool()
+    val uart_tx = out Bool ()
   }
   noIoPrefix()
 
@@ -15,7 +15,7 @@ class UartTxTest extends Component {
 
   // Send incrementing bytes continuously
   val counter = Reg(UInt(8 bits)) init 0
-  uart.io.write.valid   := True
+  uart.io.write.valid := True
   uart.io.write.payload := counter.asBits
   when(uart.io.write.fire) { counter := counter + 1 }
 }

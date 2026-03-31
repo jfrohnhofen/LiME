@@ -7,24 +7,24 @@ import spinal.lib._
 
 class RgmiiRxTest extends Component {
   val io = new Bundle {
-    val phy0 = RgmiiRxIo()
-    val uart_tx    = out Bool()
+    val phy0_rx = RgmiiRxIo()
+    val uart_tx = out Bool ()
   }
   noIoPrefix()
 
   val rx = new RgmiiRx
-  rx.io.rgmii <> io.phy0
+  rx.io.rgmii <> io.phy0_rx
 
   // CDC: rxClockDomain → system clock, drops frames silently when full
   val fifo = new StreamFifoCC(
-    dataType  = Bits(8 bits),
-    depth     = 512,
+    dataType = Bits(8 bits),
+    depth = 512,
     pushClock = rx.rxClockDomain,
-    popClock  = ClockDomain.current
+    popClock = ClockDomain.current
   )
 
   new ClockingArea(rx.rxClockDomain) {
-    fifo.io.push.valid   := rx.io.output.valid
+    fifo.io.push.valid := rx.io.output.valid
     fifo.io.push.payload := rx.io.output.payload
   }
 
@@ -32,4 +32,3 @@ class RgmiiRxTest extends Component {
   uart.io.write << fifo.io.pop
   io.uart_tx := uart.io.tx
 }
-
