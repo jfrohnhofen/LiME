@@ -11,4 +11,10 @@ object Config
         resetActiveLevel = LOW
       ),
       defaultClockDomainFrequency = FixedFrequency(25 MHz)
-    )
+    ) {
+
+  def main(args: Array[String]): Unit = {
+    val clazz = Class.forName(s"lime.${args(0)}")
+    generateVerilog(clazz.getDeclaredConstructor().newInstance().asInstanceOf[Component])
+  }
+}

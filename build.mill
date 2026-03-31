@@ -1,6 +1,7 @@
 //| mill-version:1.0.5
 
 import mill._, scalalib._, scalafmt._
+import mainargs.arg
 
 object `package` extends ScalaModule with ScalafmtModule {
   def scalaVersion = "2.13.14"
@@ -17,91 +18,85 @@ object `package` extends ScalaModule with ScalafmtModule {
 
   def constraints = Task.Source(sourceDir / "Colorlight-5A-75E.lpf")
 
-  trait SpinalHdlModule extends Module {
-    val moduleName = this.getClass.getSimpleName.stripSuffix("$")
+  def generate(@arg(positional = true) className: String) = Task.Command {
+    compile()
 
-    def generate = Task {
-      compile()
+    os.proc(
+      "java",
+      "-cp",
+      runClasspath().map(_.path).mkString(":"),
+      "lime.Config",
+      className
+    ).call(cwd = Task.dest)
 
-      os.proc(
-        "java",
-        "-cp",
-        runClasspath().map(_.path).mkString(":"),
-        s"lime.$moduleName"
-      ).call(cwd = Task.dest)
-
-      PathRef(Task.dest / s"$moduleName.v")
-    }
-
-    def synthesize = Task {
-      val verilogFile = generate().path
-      val synthFile = Task.dest / s"$moduleName.json"
-
-      os.proc(
-        "yosys",
-        "-q",
-        "-p",
-        s"synth_ecp5 -top $moduleName -json ${synthFile}",
-        verilogFile
-      ).call(cwd = Task.dest)
-
-      PathRef(synthFile)
-    }
-
-    def placeAndRoute = Task {
-      val synthFile = synthesize().path
-      val lpfFile = constraints().path
-      val cfgFile = Task.dest / s"$moduleName.cfg"
-
-      os.proc(
-        "nextpnr-ecp5",
-        "--25k",
-        "--package",
-        "CABGA256",
-        "--speed",
-        "6",
-        "--top", moduleName,
-        "--json",
-        synthFile,
-        "--textcfg",
-        cfgFile,
-        "--lpf",
-        lpfFile
-      ).call(cwd = Task.dest)
-
-      PathRef(cfgFile)
-    }
-
-    def bitstream = Task {
-      val cfgFile = placeAndRoute().path
-      val bitstreamFile = Task.dest / s"$moduleName.bit"
-
-      os.proc(
-        "ecppack",
-        cfgFile,
-        bitstreamFile
-      ).call(cwd = Task.dest)
-
-      println(s"Bitstream ready at $bitstreamFile")
-      PathRef(bitstreamFile)
-    }
-
-    def program(flash: mainargs.Flag) = Task.Command {
-      val bitstreamFile = bitstream().path
-
-      os.proc(
-        "openFPGALoader",
-        "--cable",
-        "usb-blaster",
-        if (flash.value) Seq("--unprotect-flash", "-f") else Seq(),
-        bitstreamFile
-      ).call(cwd = Task.dest)
-    }
+    PathRef(Task.dest / s"${className.split('.').last}.v")
   }
 
-  object LedBlink extends SpinalHdlModule {}
+  def synthesize(@arg(positional = true) className: String) = Task.Command {
+    val simpleName  = className.split('.').last
+    val verilogFile = generate(className)().path
+    val synthFile   = Task.dest / s"$simpleName.json"
 
-  object UartTest extends SpinalHdlModule {}
+    os.proc(
+      "yosys",
+      "-q",
+      "-p",
+      s"synth_ecp5 -top $simpleName -json ${synthFile}",
+      verilogFile
+    ).call(cwd = Task.dest)
 
-  object RgmiiTest extends SpinalHdlModule {}
+    PathRef(synthFile)
+  }
+
+  def placeAndRoute(@arg(positional = true) className: String) = Task.Command {
+    val simpleName = className.split('.').last
+    val synthFile  = synthesize(className)().path
+    val lpfFile    = constraints().path
+    val cfgFile    = Task.dest / s"$simpleName.cfg"
+
+    os.proc(
+      "nextpnr-ecp5",
+      "--25k",
+      "--package",
+      "CABGA256",
+      "--speed",
+      "6",
+      "--top", simpleName,
+      "--json",
+      synthFile,
+      "--textcfg",
+      cfgFile,
+      "--lpf",
+      lpfFile
+    ).call(cwd = Task.dest)
+
+    PathRef(cfgFile)
+  }
+
+  def bitstream(@arg(positional = true) className: String) = Task.Command {
+    val simpleName    = className.split('.').last
+    val cfgFile       = placeAndRoute(className)().path
+    val bitstreamFile = Task.dest / s"$simpleName.bit"
+
+    os.proc(
+      "ecppack",
+      cfgFile,
+      bitstreamFile
+    ).call(cwd = Task.dest)
+
+    println(s"Bitstream ready at $bitstreamFile")
+    PathRef(bitstreamFile)
+  }
+
+  def program(@arg(positional = true) className: String, flash: mainargs.Flag) = Task.Command {
+    val bitstreamFile = bitstream(className)().path
+
+    os.proc(
+      "openFPGALoader",
+      "--cable",
+      "usb-blaster",
+      if (flash.value) Seq("--unprotect-flash", "-f") else Seq(),
+      bitstreamFile
+    ).call(cwd = Task.dest)
+  }
 }
