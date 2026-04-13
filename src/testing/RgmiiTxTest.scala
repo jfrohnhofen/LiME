@@ -55,16 +55,18 @@ class RgmiiTxTest extends Component {
     val rom = Vec(frameBytes.map(b => B(b, 8 bits)))
 
     val sending = Reg(Bool()) init False
-    val idx = Reg(UInt(log2Up(frameLen) bits)) init 0
-    val gap = Reg(UInt(20 bits)) init 0
+    val idx     = Reg(UInt(log2Up(frameLen) bits)) init 0
+    val gap     = Reg(UInt(20 bits)) init 0
 
     when(sending) {
-      when(idx === frameLen - 1) {
-        sending := False
-        idx := 0
-        gap := 999999 // ~8 ms gap at 125 MHz before next frame
-      } otherwise {
-        idx := idx + 1
+      when(tx.io.input.fire) {
+        when(idx === frameLen - 1) {
+          sending := False
+          idx     := 0
+          gap     := 999999 // ~8 ms gap at 125 MHz before next frame
+        } otherwise {
+          idx := idx + 1
+        }
       }
     } otherwise {
       when(gap === 0) {
@@ -74,7 +76,8 @@ class RgmiiTxTest extends Component {
       }
     }
 
-    tx.io.input.valid := sending
-    tx.io.input.payload := rom(idx)
+    tx.io.input.valid            := sending
+    tx.io.input.payload.fragment := rom(idx)
+    tx.io.input.payload.last     := idx === frameLen - 1
   }
 }

@@ -10,7 +10,7 @@ class UartTxTest extends Component {
   }
   noIoPrefix()
 
-  val uart = new UartTx(baudRate = 1_000_000, dataLength = 8)
+  val uart = new UartTx(baudRate = 1_000_000)
   io.uart_tx := uart.io.tx
 
   // Send incrementing bytes continuously

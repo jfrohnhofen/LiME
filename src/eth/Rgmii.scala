@@ -23,7 +23,7 @@ case class RgmiiIo() extends Bundle {
 class RgmiiRx extends Component {
   val io = new Bundle {
     val rgmii = RgmiiRxIo()
-    val output = master(Flow(Bits(8 bits)))
+    val output = master(Stream(Fragment(Bits(8 bits))))
   }
 
   val rxClockDomain = ClockDomain(
@@ -52,15 +52,41 @@ class RgmiiRx extends Component {
     // RX_CTL: rising = RX_DV, falling = RX_DV XOR RX_ERR
     val (rxDv, rxDvXorErr) = ddrIn(io.rgmii.ctl)
 
-    io.output.valid := rxDv && rxDvXorErr
-    io.output.payload := highNibble ## lowNibble
+    val byteValid   = rxDv && rxDvXorErr
+    val prevValid   = RegNext(byteValid, False)
+    val prevPayload = RegNext(highNibble ## lowNibble)
+
+    val inFrame     = RegInit(False)
+    val acceptFrame = RegInit(False)
+
+    val last = prevValid && !byteValid
+
+    // First byte of a frame: sample ready combinationally.
+    // Subsequent bytes: use latched acceptFrame so ready fluctuations mid-frame are ignored.
+    // Note: ready is a drop gate, not true backpressure — the PHY cannot be stalled.
+    val accepting = Mux(inFrame, acceptFrame, io.output.ready)
+
+    when(prevValid) {
+      when(!inFrame) {        // frame start: latch admission decision
+        inFrame     := True
+        acceptFrame := io.output.ready
+      }
+      when(last) {            // frame end: reset for next frame
+        inFrame     := False
+        acceptFrame := False
+      }
+    }
+
+    io.output.valid            := prevValid && accepting
+    io.output.payload.fragment := prevPayload
+    io.output.payload.last     := last
   }
 }
 
 class RgmiiTx extends Component {
   val io = new Bundle {
     val rgmii = RgmiiTxIo()
-    val input = slave(Flow(Bits(8 bits)))
+    val input = slave(Stream(Fragment(Bits(8 bits))))
   }
 
   def ddrOut(rising: Bool, falling: Bool): Bool = {
@@ -71,17 +97,33 @@ class RgmiiTx extends Component {
     oddr.io.Q
   }
 
+  // IPG: IEEE 802.3 requires 12 bytes (96 bits) minimum gap between frames.
+  val IpgBytes = 12
+  val ipgCounter = Reg(UInt(4 bits)) init 0
+  val inIpg = ipgCounter =/= 0
+
+  when(inIpg) {
+    ipgCounter := ipgCounter - 1
+  }
+
+  when(io.input.fire && io.input.payload.last) {
+    ipgCounter := IpgBytes
+  }
+
+  io.input.ready := !inIpg
+
   // Output clock: D0=1, D1=0 gives 50% duty cycle at the clock frequency.
   io.rgmii.clk := ddrOut(True, False)
 
-  val lowNibble = io.input.payload(3 downto 0)
-  val highNibble = io.input.payload(7 downto 4)
+  val txEn = io.input.fire
+  val lowNibble  = io.input.payload.fragment(3 downto 0)
+  val highNibble = io.input.payload.fragment(7 downto 4)
   for (i <- 0 until 4) {
     io.rgmii.data(i) := ddrOut(lowNibble(i), highNibble(i))
   }
 
   // TX_CTL: rising = TX_EN, falling = TX_EN XOR TX_ERR. TX_ERR=0, so both edges = TX_EN.
-  io.rgmii.ctl := ddrOut(io.input.valid, io.input.valid)
+  io.rgmii.ctl := ddrOut(txEn, txEn)
 }
 
 // ECP5 DDR input primitive.

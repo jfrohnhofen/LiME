@@ -3,7 +3,7 @@ package lime.util
 import spinal.core._
 import spinal.lib._
 
-class UartTx(baudRate: Int, dataLength: Int) extends Component {
+class UartTx(baudRate: Int) extends Component {
   object State extends SpinalEnum {
     val IDLE, START, DATA, STOP = newElement()
   }
@@ -11,14 +11,14 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
 
   val io = new Bundle {
     val tx = out Bool ()
-    val write = slave Stream (Bits(dataLength bit))
+    val write = slave Stream(Byte)
   }
 
   val ticksPerBit = (ClockDomain.current.frequency.getValue / baudRate).toInt
   val counter = CounterFreeRun(ticksPerBit)
   val stopCounter = CounterFreeRun(16 * ticksPerBit)
-  val bitIndex = Reg(UInt(log2Up(dataLength) bits))
-  val payload = Reg(Bits(dataLength bit))
+  val bitIndex = Reg(UInt(3 bits))
+  val payload = Reg(Byte)
 
   val state = RegInit(IDLE)
   io.write.ready := state === IDLE
@@ -45,7 +45,7 @@ class UartTx(baudRate: Int, dataLength: Int) extends Component {
     is(DATA) {
       io.tx := payload(bitIndex)
       when(counter.willOverflow) {
-        when(bitIndex === dataLength - 1) {
+        when(bitIndex === 8 - 1) {
           stopCounter.clear()
           state := STOP
         }

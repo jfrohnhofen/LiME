@@ -25,7 +25,7 @@ object `package` extends ScalaModule with ScalafmtModule {
       "java",
       "-cp",
       runClasspath().map(_.path).mkString(":"),
-      "lime.Config",
+      "lime.util.Config",
       className
     ).call(cwd = Task.dest)
 

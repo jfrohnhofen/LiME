@@ -1,4 +1,4 @@
-package lime
+package lime.util
 
 import spinal.core._
 

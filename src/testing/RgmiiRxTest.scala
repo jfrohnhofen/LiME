@@ -15,20 +15,18 @@ class RgmiiRxTest extends Component {
   val rx = new RgmiiRx
   rx.io.rgmii <> io.phy0_rx
 
-  // CDC: rxClockDomain → system clock, drops frames silently when full
+  // CDC: rxClockDomain → system clock.
+  // ready fed back to RgmiiRx: new frames are dropped when the FIFO is full.
   val fifo = new StreamFifoCC(
-    dataType = Bits(8 bits),
-    depth = 512,
+    dataType  = Fragment(Bits(8 bits)),
+    depth     = 512,
     pushClock = rx.rxClockDomain,
-    popClock = ClockDomain.current
+    popClock  = ClockDomain.current
   )
 
-  new ClockingArea(rx.rxClockDomain) {
-    fifo.io.push.valid := rx.io.output.valid
-    fifo.io.push.payload := rx.io.output.payload
-  }
+  fifo.io.push << rx.io.output
 
-  val uart = new UartTx(baudRate = 1_000_000, dataLength = 8)
-  uart.io.write << fifo.io.pop
+  val uart = new UartTx(baudRate = 1_000_000)
+  uart.io.write << fifo.io.pop.map(_.fragment)
   io.uart_tx := uart.io.tx
 }
