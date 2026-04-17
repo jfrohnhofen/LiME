@@ -1,16 +1,11 @@
-package lime.testing
+package testing
 
-import lime.eth._
+import lime.net._
+import lime.util._
 import spinal.core._
 import spinal.lib._
 
 // Transparent Ethernet bridge: forwards every received frame from phy0 to phy1 and vice versa.
-//
-// Key insight: use phy0's recovered RX clock as phy1's TX clock (and vice versa).
-// Both PHYs run at 125 MHz, so the clocks are frequency-matched and no CDC is needed.
-//
-// RgmiiTx enforces the 12-byte IPG; RgmiiRx will drop an incoming frame if TX is not
-// ready (i.e. still in IPG), but in practice minimum-IPG back-to-back frames are rare.
 class RgmiiBridgeTest extends Component {
   val io = new Bundle {
     val phy0 = RgmiiIo()
@@ -18,23 +13,50 @@ class RgmiiBridgeTest extends Component {
   }
   noIoPrefix()
 
-  // phy0 RX → phy1 TX  (phy0's rxc drives phy1's txc)
+  val pll = new Pll25to125
+  pll.io.CLKI := ClockDomain.current.readClockWire
+  pll.io.CLKFB := pll.io.CLKOP
+  pll.io.RST := False
+  pll.io.STDBY := False
+
+  val systemClock = ClockDomain(
+    clock = pll.io.CLKOP,
+    config = ClockDomainConfig(resetKind = BOOT)
+  )
+
+  // phy0 RX → phy1 TX
   val rx0 = new RgmiiRx
   rx0.io.rgmii <> io.phy0.rx
 
-  new ClockingArea(rx0.rxClockDomain) {
+  val fifo0 = new StreamFifoCC(
+    dataType = Fragment(Byte),
+    depth = 2048,
+    pushClock = rx0.rxClockDomain,
+    popClock = systemClock
+  )
+  fifo0.io.push << rx0.io.output.toStream
+
+  new ClockingArea(systemClock) {
     val tx1 = new RgmiiTx
     tx1.io.rgmii <> io.phy1.tx
-    tx1.io.input << rx0.io.output
+    tx1.io.input << fifo0.io.pop.m2sPipe()
   }
 
-  // phy1 RX → phy0 TX  (phy1's rxc drives phy0's txc)
+  // phy1 RX → phy0 TX
   val rx1 = new RgmiiRx
   rx1.io.rgmii <> io.phy1.rx
 
-  new ClockingArea(rx1.rxClockDomain) {
+  val fifo1 = new StreamFifoCC(
+    dataType = Fragment(Byte),
+    depth = 2048,
+    pushClock = rx1.rxClockDomain,
+    popClock = systemClock
+  )
+  fifo1.io.push << rx1.io.output.toStream
+
+  new ClockingArea(systemClock) {
     val tx0 = new RgmiiTx
     tx0.io.rgmii <> io.phy0.tx
-    tx0.io.input << rx1.io.output
+    tx0.io.input << fifo1.io.pop.m2sPipe()
   }
 }

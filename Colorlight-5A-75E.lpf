@@ -59,7 +59,8 @@ LOCATE COMP "hub75_addr[2]" SITE "P3";
 LOCATE COMP "hub75_addr[3]" SITE "P4";
 
 # UART
-LOCATE COMP "uart_tx" SITE "C4";
+LOCATE COMP "uart0_tx" SITE "C4";
+LOCATE COMP "uart1_tx" SITE "F3";
 
 FREQUENCY PORT "clk" 25 MHz;
 FREQUENCY PORT "phy0_rx_clk" 125 MHz;

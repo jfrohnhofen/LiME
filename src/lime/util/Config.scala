@@ -14,7 +14,7 @@ object Config
     ) {
 
   def main(args: Array[String]): Unit = {
-    val clazz = Class.forName(s"lime.${args(0)}")
+    val clazz = Class.forName(args(0))
     generateVerilog(clazz.getDeclaredConstructor().newInstance().asInstanceOf[Component])
   }
 }

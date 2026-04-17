@@ -1,7 +1,9 @@
-package lime.eth
+package lime.net
 
+import lime.util._
 import spinal.core._
 import spinal.lib._
+import spinal.lib.fsm._
 
 case class RgmiiRxIo() extends Bundle {
   val clk = in Bool ()
@@ -23,7 +25,7 @@ case class RgmiiIo() extends Bundle {
 class RgmiiRx extends Component {
   val io = new Bundle {
     val rgmii = RgmiiRxIo()
-    val output = master(Stream(Fragment(Bits(8 bits))))
+    val output = master(Flow(Fragment(Byte)))
   }
 
   val rxClockDomain = ClockDomain(
@@ -45,41 +47,39 @@ class RgmiiRx extends Component {
     val highNibble = Bits(4 bits)
     for (i <- 0 until 4) {
       val (rising, falling) = ddrIn(io.rgmii.data(i))
-      lowNibble(i) := rising // low nibble driven at rising edge
-      highNibble(i) := falling // high nibble driven at falling edge
+      lowNibble(i) := rising
+      highNibble(i) := falling
     }
 
-    // RX_CTL: rising = RX_DV, falling = RX_DV XOR RX_ERR
     val (rxDv, rxDvXorErr) = ddrIn(io.rgmii.ctl)
+    val valid = rxDv && rxDvXorErr
+    val payload = highNibble ## lowNibble
+    val prevValid = RegNext(valid, False)
+    val prevPayload = RegNext(payload)
+    val last = prevValid && !valid
 
-    val byteValid   = rxDv && rxDvXorErr
-    val prevValid   = RegNext(byteValid, False)
-    val prevPayload = RegNext(highNibble ## lowNibble)
+    val fsm = new StateMachine {
+      val IDLE = new State with EntryPoint
+      val PREAMBLE = new State
+      val INFRAME = new State
 
-    val inFrame     = RegInit(False)
-    val acceptFrame = RegInit(False)
-
-    val last = prevValid && !byteValid
-
-    // First byte of a frame: sample ready combinationally.
-    // Subsequent bytes: use latched acceptFrame so ready fluctuations mid-frame are ignored.
-    // Note: ready is a drop gate, not true backpressure — the PHY cannot be stalled.
-    val accepting = Mux(inFrame, acceptFrame, io.output.ready)
-
-    when(prevValid) {
-      when(!inFrame) {        // frame start: latch admission decision
-        inFrame     := True
-        acceptFrame := io.output.ready
+      IDLE.whenIsActive {
+        when(valid) { goto(PREAMBLE) }
       }
-      when(last) {            // frame end: reset for next frame
-        inFrame     := False
-        acceptFrame := False
+
+      PREAMBLE.whenIsActive {
+        when(!valid) { goto(IDLE) }
+          .elsewhen(prevPayload === 0xd5) { goto(INFRAME) }
+      }
+
+      INFRAME.whenIsActive {
+        when(last) { goto(IDLE) }
       }
     }
 
-    io.output.valid            := prevValid && accepting
-    io.output.payload.fragment := prevPayload
-    io.output.payload.last     := last
+    io.output.valid := fsm.isActive(fsm.INFRAME)
+    io.output.fragment := prevPayload
+    io.output.last := last
   }
 }
 
@@ -97,32 +97,55 @@ class RgmiiTx extends Component {
     oddr.io.Q
   }
 
-  // IPG: IEEE 802.3 requires 12 bytes (96 bits) minimum gap between frames.
-  val IpgBytes = 12
-  val ipgCounter = Reg(UInt(4 bits)) init 0
-  val inIpg = ipgCounter =/= 0
+  val IpgBytes = 12 // IPG: IEEE 802.3 requires 12 bytes (96 bits) minimum gap between frames.
+  val PreambleBytes = 8 // 7 × 0x55 preamble + 0xd5 SFD.
+  val ipgCounter = Reg(UInt(log2Up(IpgBytes) bits)) init (IpgBytes - 1)
+  val preambleCounter = Reg(UInt(log2Up(PreambleBytes) bits)) init (PreambleBytes - 1)
 
-  when(inIpg) {
-    ipgCounter := ipgCounter - 1
+  val fsm = new StateMachine {
+    val IDLE = new State with EntryPoint
+    val PREAMBLE = new State
+    val DATA = new State
+    val IPG = new State
+
+    IDLE.whenIsActive {
+      when(io.input.valid) {
+        preambleCounter := PreambleBytes - 1
+        goto(PREAMBLE)
+      }
+    }
+
+    PREAMBLE.whenIsActive {
+      preambleCounter := preambleCounter - 1
+      when(preambleCounter === 0) { goto(DATA) }
+    }
+
+    DATA.whenIsActive {
+      when(io.input.fire && io.input.last) {
+        ipgCounter := IpgBytes - 1
+        goto(IPG)
+      }
+    }
+
+    IPG.whenIsActive {
+      ipgCounter := ipgCounter - 1
+      when(ipgCounter === 0) { goto(IDLE) }
+    }
   }
 
-  when(io.input.fire && io.input.payload.last) {
-    ipgCounter := IpgBytes
-  }
-
-  io.input.ready := !inIpg
+  io.input.ready := fsm.isActive(fsm.DATA)
 
   // Output clock: D0=1, D1=0 gives 50% duty cycle at the clock frequency.
   io.rgmii.clk := ddrOut(True, False)
 
-  val txEn = io.input.fire
-  val lowNibble  = io.input.payload.fragment(3 downto 0)
-  val highNibble = io.input.payload.fragment(7 downto 4)
+  val txData =
+    Mux(fsm.isActive(fsm.PREAMBLE), Mux(preambleCounter === 0, B(0xd5, 8 bits), B(0x55, 8 bits)), io.input.fragment)
   for (i <- 0 until 4) {
-    io.rgmii.data(i) := ddrOut(lowNibble(i), highNibble(i))
+    io.rgmii.data(i) := ddrOut(txData(i), txData(i + 4))
   }
 
   // TX_CTL: rising = TX_EN, falling = TX_EN XOR TX_ERR. TX_ERR=0, so both edges = TX_EN.
+  val txEn = fsm.isActive(fsm.PREAMBLE) || io.input.fire
   io.rgmii.ctl := ddrOut(txEn, txEn)
 }
 

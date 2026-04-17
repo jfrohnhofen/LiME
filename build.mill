@@ -14,9 +14,9 @@ object `package` extends ScalaModule with ScalafmtModule {
 
   def scalacPluginMvnDeps = Seq(mvn"com.github.spinalhdl::spinalhdl-idsl-plugin:$spinalVersion")
 
-  def sourceDir = moduleDir / "src"
+  def format() = Task.Command { reformat()() }
 
-  def constraints = Task.Source(sourceDir / "Colorlight-5A-75E.lpf")
+  def constraints = Task.Source(moduleDir / "Colorlight-5A-75E.lpf")
 
   def generate(@arg(positional = true) className: String) = Task.Command {
     compile()

@@ -11,7 +11,7 @@ class UartTx(baudRate: Int) extends Component {
 
   val io = new Bundle {
     val tx = out Bool ()
-    val write = slave Stream(Byte)
+    val write = slave Stream (Byte)
   }
 
   val ticksPerBit = (ClockDomain.current.frequency.getValue / baudRate).toInt
