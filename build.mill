@@ -57,17 +57,12 @@ object `package` extends ScalaModule with ScalafmtModule {
     os.proc(
       "nextpnr-ecp5",
       "--25k",
-      "--package",
-      "CABGA256",
-      "--speed",
-      "6",
+      "--package", "CABGA256",
+      "--speed", "6",
       "--top", simpleName,
-      "--json",
-      synthFile,
-      "--textcfg",
-      cfgFile,
-      "--lpf",
-      lpfFile
+      "--json", synthFile,
+      "--textcfg", cfgFile,
+      "--lpf", lpfFile
     ).call(cwd = Task.dest)
 
     PathRef(cfgFile)

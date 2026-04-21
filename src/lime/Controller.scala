@@ -39,8 +39,8 @@ abstract class Controller extends Component {
     val phy0 = RgmiiIo()
     val phy1 = RgmiiIo()
 
-    val uart0_tx = out Bool()
-    val uart1_tx = out Bool()
+    val uart0_tx = out Bool ()
+    val uart1_tx = out Bool ()
   }
   noIoPrefix()
 

@@ -12,6 +12,7 @@ class BridgePath extends Component {
     val uart = out Bool ()
   }
 
+  // RX stream
   val rx = new RgmiiRx
   rx.io.rgmii <> io.rx
 
@@ -23,20 +24,27 @@ class BridgePath extends Component {
   )
   fifo.io.push << rx.io.output.toStream
 
-  val packetGen = new StaticPacketGen
 
+  // IGMP stream
+  val igmpGen = new StaticPacketGen
+
+
+  // Arbiter
   val arbiter = StreamArbiterFactory().lowerFirst.fragmentLock.build(Fragment(Byte), 2)
-  val mainStream = fifo.io.pop.m2sPipe()
-  arbiter.io.inputs(0) << mainStream
-  arbiter.io.inputs(1) << packetGen.io.output
+  arbiter.io.inputs(0) <-< fifo.io.pop
+  arbiter.io.inputs(1) <-< igmpGen.io.output
 
   val tx = new RgmiiTx
   tx.io.rgmii <> io.tx
-  tx.io.input << arbiter.io.output
+  tx.io.input <-/< arbiter.io.output
+
+
+  // Network stack
+  val ethRx = new EthRx
+  ethRx.io.input <-< fifo.io.pop.toFlowFire
 
   val sniffer = new FrameSniffer(4096)
-  sniffer.io.tap.valid   := RegNext(mainStream.fire, init = False)
-  sniffer.io.tap.payload := RegNext(mainStream.payload)
+  sniffer.io.tap <-< ethRx.io.output
 
   val uartTx = new UartTx(1_000_000)
   uartTx.io.write << sniffer.io.output
