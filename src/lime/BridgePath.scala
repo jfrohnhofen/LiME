@@ -40,11 +40,14 @@ class BridgePath extends Component {
 
 
   // Network stack
-  val ethRx = new EthRx
-  ethRx.io.input <-< fifo.io.pop.toFlowFire
+  val eth = new EthRx
+  eth.io.input <-< fifo.io.pop.toFlowFire
+
+  val ip = new Ipv4Rx
+  ip.io.input <-< eth.io.output.throwWhen(eth.io.header.etherType =/= 0x0800)
 
   val sniffer = new FrameSniffer(4096)
-  sniffer.io.tap <-< ethRx.io.output
+  sniffer.io.tap <-< ip.io.output
 
   val uartTx = new UartTx(1_000_000)
   uartTx.io.write << sniffer.io.output
