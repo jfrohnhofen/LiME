@@ -38,6 +38,9 @@ abstract class Controller extends Component {
   val io = new Bundle {
     val phy0 = RgmiiIo()
     val phy1 = RgmiiIo()
+
+    val uart0_tx = out Bool()
+    val uart1_tx = out Bool()
   }
   noIoPrefix()
 
@@ -50,7 +53,8 @@ abstract class Controller extends Component {
 
   protected val systemClock = ClockDomain(
     clock = pll.io.CLKOP,
-    config = ClockDomainConfig(resetKind = BOOT)
+    config = ClockDomainConfig(resetKind = BOOT),
+    frequency = FixedFrequency(125 MHz)
   )
 
   protected val bridge = new ClockingArea(systemClock) {
@@ -60,6 +64,9 @@ abstract class Controller extends Component {
 
   bridge.path0.io.rx <> io.phy0.rx
   bridge.path0.io.tx <> io.phy1.tx
+  bridge.path0.io.uart <> io.uart0_tx
+
   bridge.path1.io.rx <> io.phy1.rx
   bridge.path1.io.tx <> io.phy0.tx
+  bridge.path1.io.uart <> io.uart1_tx
 }

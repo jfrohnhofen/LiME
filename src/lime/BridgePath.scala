@@ -9,7 +9,7 @@ class BridgePath extends Component {
   val io = new Bundle {
     val rx = RgmiiRxIo()
     val tx = RgmiiTxIo()
-    val uartTx = out Bool ()
+    val uart = out Bool ()
   }
 
   val rx = new RgmiiRx
@@ -25,13 +25,20 @@ class BridgePath extends Component {
 
   val packetGen = new StaticPacketGen
 
-  // lowerFirst: input 0 wins whenever valid, so input 1 only starts when FIFO is empty
-  // fragmentLock: once input 1 starts a packet it runs to last before re-arbitrating
   val arbiter = StreamArbiterFactory().lowerFirst.fragmentLock.build(Fragment(Byte), 2)
-  arbiter.io.inputs(0) << fifo.io.pop.m2sPipe()
+  val mainStream = fifo.io.pop.m2sPipe()
+  arbiter.io.inputs(0) << mainStream
   arbiter.io.inputs(1) << packetGen.io.output
 
   val tx = new RgmiiTx
   tx.io.rgmii <> io.tx
   tx.io.input << arbiter.io.output
+
+  val sniffer = new FrameSniffer(4096)
+  sniffer.io.tap.valid   := RegNext(mainStream.fire, init = False)
+  sniffer.io.tap.payload := RegNext(mainStream.payload)
+
+  val uartTx = new UartTx(1_000_000)
+  uartTx.io.write << sniffer.io.output
+  io.uart := uartTx.io.tx
 }
