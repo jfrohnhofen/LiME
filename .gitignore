@@ -1,4 +1,5 @@
-.vscode/
+.direnv/
 .metals/
+.vscode/
 out/
 mill.*

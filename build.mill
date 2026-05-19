@@ -16,7 +16,7 @@ object `package` extends ScalaModule with ScalafmtModule {
 
   def format() = Task.Command { reformat()() }
 
-  def constraints = Task.Source(moduleDir / "Colorlight-5A-75E.lpf")
+  def constraints = Task.Source(moduleDir / "src" / "Colorlight-5A-75E.lpf")
 
   def generate(@arg(positional = true) className: String) = Task.Command {
     compile()
@@ -27,7 +27,7 @@ object `package` extends ScalaModule with ScalafmtModule {
       runClasspath().map(_.path).mkString(":"),
       "lime.util.Config",
       className
-    ).call(cwd = Task.dest)
+    ).call(cwd = Task.dest, stdout = os.Inherit, stderr = os.Inherit)
 
     PathRef(Task.dest / s"${className.split('.').last}.v")
   }
