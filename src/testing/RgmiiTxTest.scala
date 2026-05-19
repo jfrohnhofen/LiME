@@ -7,21 +7,16 @@ import spinal.lib._
 
 class RgmiiTxTest extends Component {
   val io = new Bundle {
-    val phy0_tx = RgmiiTxIo()
+    val phy0 = out(Rgmii.Tx())
   }
   noIoPrefix()
 
   // PLL: 25 MHz system clock → 125 MHz TX clock
-  val pll = new Pll25to125
+  val pll = Pll25to125()
   pll.io.CLKI := ClockDomain.current.readClockWire
   pll.io.CLKFB := pll.io.CLKOP // internal feedback
   pll.io.RST := False
   pll.io.STDBY := False
-
-  val txClockDomain = ClockDomain(
-    clock = pll.io.CLKOP,
-    config = ClockDomainConfig(resetKind = BOOT)
-  )
 
   val frameBytes: Seq[Int] = Seq(
     // Destination MAC (Broadcast)
@@ -48,9 +43,14 @@ class RgmiiTxTest extends Component {
     0x9b, 0xf8, 0x2c, 0x5b
   )
 
+  val txClockDomain = ClockDomain(
+    clock = pll.io.CLKOP,
+    config = ClockDomainConfig(resetKind = BOOT)
+  )
+
   new ClockingArea(txClockDomain) {
-    val tx = new RgmiiTx
-    tx.io.rgmii <> io.phy0_tx
+    val tx = new RgmiiTx()
+    tx.io.rgmii <> io.phy0
 
     val frameLen = frameBytes.length
     val rom = Vec(frameBytes.map(b => B(b, 8 bits)))

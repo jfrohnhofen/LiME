@@ -5,10 +5,10 @@ import spinal.lib._
 
 // Taps a fragment stream without backpressuring upstream.
 // Accepts or drops whole frames based on FIFO occupancy at frame start.
-class FrameSniffer(fifoDepth: Int = 4096) extends Component {
+case class FrameSniffer(val fifoDepth: Int = 4096) extends Component {
   val io = new Bundle {
-    val tap = slave Flow (Fragment(Byte))
-    val output = master Stream (Byte)
+    val tap = slave(Flow(Fragment(Byte)))
+    val output = master(Stream(Byte))
   }
 
   val fifo = StreamFifo(Byte, fifoDepth)

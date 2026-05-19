@@ -1,21 +1,22 @@
 package testing
 
 import lime.util._
+
 import spinal.core._
 import spinal.lib._
 
 class UartTxTest extends Component {
   val io = new Bundle {
-    val uart0_tx = out Bool ()
+    val uart = out(Bool()).setName("hub75_j16_r0")
   }
   noIoPrefix()
 
-  val uart = new UartTx(baudRate = 1_000_000)
-  io.uart0_tx := uart.io.tx
+  val uartTx = UartTx(baudRate = 1_000_000)
+  io.uart := uartTx.io.tx
 
   // Send incrementing bytes continuously
   val counter = Reg(UInt(8 bits)) init 0
-  uart.io.write.valid := True
-  uart.io.write.payload := counter.asBits
-  when(uart.io.write.fire) { counter := counter + 1 }
+  uartTx.io.write.valid := True
+  uartTx.io.write.payload := counter.asBits
+  when(uartTx.io.write.fire) { counter := counter + 1 }
 }

@@ -5,38 +5,57 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
 
-case class RgmiiRxIo() extends Bundle {
-  val clk = in Bool ()
-  val data = in Bits (4 bits)
-  val ctl = in Bool ()
+object Rgmii {
+  case class Rx() extends Bundle {
+    val rxc = Bool()
+    val rxd = Bits(4 bits)
+    val rxctl = Bool()
+  }
+  case class Tx() extends Bundle {
+    val txc = Bool()
+    val txd = Bits(4 bits)
+    val txctl = Bool()
+  }
+
+  final val IPG_BYTES = 12
+  final val PREAMBLE_SFD_BYTES = 8
+  final val PREAMBLE_VALUE = 0x55
+  final val SFD_VALUE = 0xd5
 }
 
-case class RgmiiTxIo() extends Bundle {
-  val clk = out Bool ()
-  val data = out Bits (4 bits)
-  val ctl = out Bool ()
+case class Rgmii() extends Bundle with IMasterSlave {
+  val rxc = Bool()
+  val rxd = Bits(4 bits)
+  val rxctl = Bool()
+
+  val txc = Bool()
+  val txd = Bits(4 bits)
+  val txctl = Bool()
+
+  override def asMaster(): Unit = {
+    in(rxc, rxd, rxctl)
+    out(txc, txd, txctl)
+  }
+
+  def rx: Rgmii.Rx = { val rx = Rgmii.Rx(); rx.rxc := rxc; rx.rxd := rxd; rx.rxctl := rxctl; rx }
+  def tx: Rgmii.Tx = { val tx = Rgmii.Tx(); txc := tx.txc; txd := tx.txd; txctl := tx.txctl; tx }
 }
 
-case class RgmiiIo() extends Bundle {
-  val rx = RgmiiRxIo()
-  val tx = RgmiiTxIo()
-}
-
-class RgmiiRx extends Component {
+case class RgmiiRx() extends Component {
   val io = new Bundle {
-    val rgmii = RgmiiRxIo()
-    val output = master(Flow(Fragment(Byte)))
+    val rgmii = in(Rgmii.Rx())
+    val output = master(Stream(Fragment(Byte)))
   }
 
   val rxClockDomain = ClockDomain(
-    clock = io.rgmii.clk,
+    clock = io.rgmii.rxc,
     config = ClockDomainConfig(resetKind = BOOT)
   )
 
   new ClockingArea(rxClockDomain) {
     def ddrIn(d: Bool): (Bool, Bool) = {
-      val delay = new DELAYG("SCLK_ALIGNED", 80)
-      val iddr = new IDDRX1F
+      val delay = DELAYG("SCLK_ALIGNED", 80)
+      val iddr = IDDRX1F()
       delay.io.A := d
       iddr.io.D := delay.io.Z
       iddr.io.RST := False
@@ -46,111 +65,183 @@ class RgmiiRx extends Component {
     val lowNibble = Bits(4 bits)
     val highNibble = Bits(4 bits)
     for (i <- 0 until 4) {
-      val (rising, falling) = ddrIn(io.rgmii.data(i))
-      lowNibble(i) := rising
-      highNibble(i) := falling
+      val (rxdRise, rxdFall) = ddrIn(io.rgmii.rxd(i))
+      lowNibble(i) := rxdRise
+      highNibble(i) := rxdFall
     }
+    val rxData = highNibble ## lowNibble
+    val rxDataReg = RegNext(rxData) init (0)
 
-    val (rxDv, rxDvXorErr) = ddrIn(io.rgmii.ctl)
-    val valid = rxDv && rxDvXorErr
-    val payload = highNibble ## lowNibble
-    val prevValid = RegNext(valid, False)
-    val prevPayload = RegNext(payload)
-    val last = prevValid && !valid
+    val (rxctlRise, rxctlFall) = ddrIn(io.rgmii.rxctl)
+    val rxDv = rxctlRise
+    val rxEr = rxctlRise ^ rxctlFall
+
+    val phyIdle = !rxDv && !rxEr
+    val phyValid = rxDv && !rxEr
+    val phyFalseCarrier = !rxDv && rxEr
+    val phyError = rxDv && rxEr
+
+    val committed = Reg(Bool()) init (False)
+    val lastByte = Reg(Byte) init (0)
 
     val fsm = new StateMachine {
       val IDLE = new State with EntryPoint
       val PREAMBLE = new State
       val INFRAME = new State
+      val DISCARD_LAST = new State
+      val DISCARD = new State
 
       IDLE.whenIsActive {
-        when(valid) { goto(PREAMBLE) }
+        committed := False
+        when(phyValid) { goto(PREAMBLE) }
+          .elsewhen(phyFalseCarrier || phyError) { goto(DISCARD) }
       }
 
       PREAMBLE.whenIsActive {
-        when(!valid) { goto(IDLE) }
-          .elsewhen(prevPayload === 0xd5) { goto(INFRAME) }
+        when(phyIdle) { goto(IDLE) }
+          .elsewhen(phyFalseCarrier || phyError) { goto(DISCARD) }
+          .elsewhen(rxDataReg === Rgmii.SFD_VALUE) { goto(INFRAME) }
       }
 
       INFRAME.whenIsActive {
-        when(last) { goto(IDLE) }
+        when(io.output.fire) {
+          committed := phyValid
+          when(phyIdle) { goto(IDLE) }
+            .elsewhen(phyFalseCarrier || phyError) { goto(DISCARD) }
+        }.otherwise {
+          when(committed) {
+            lastByte := rxDataReg
+            goto(DISCARD_LAST)
+          }.otherwise {
+            goto(DISCARD)
+          }
+        }
+      }
+
+      DISCARD_LAST.whenIsActive {
+        when(io.output.fire) {
+          when(phyIdle) { goto(IDLE) }
+            .otherwise { goto(DISCARD) }
+        }
+      }
+
+      DISCARD.whenIsActive {
+        when(phyIdle) { goto(IDLE) }
       }
     }
 
-    io.output.valid := fsm.isActive(fsm.INFRAME)
-    io.output.fragment := prevPayload
-    io.output.last := last
+    io.output.valid := fsm.isActive(fsm.INFRAME) || fsm.isActive(fsm.DISCARD_LAST)
+    io.output.fragment := Mux(fsm.isActive(fsm.DISCARD_LAST), lastByte, rxDataReg)
+    io.output.last := fsm.isActive(fsm.DISCARD_LAST) || (fsm.isActive(fsm.INFRAME) && !phyValid)
   }
 }
 
-class RgmiiTx extends Component {
+case class RgmiiTx() extends Component {
   val io = new Bundle {
-    val rgmii = RgmiiTxIo()
-    val input = slave(Stream(Fragment(Bits(8 bits))))
+    val rgmii = out(Rgmii.Tx())
+    val input = slave(Stream(Fragment(Byte)))
   }
 
   def ddrOut(rising: Bool, falling: Bool): Bool = {
-    val oddr = new ODDRX1F
+    val oddr = ODDRX1F()
     oddr.io.D0 := rising
     oddr.io.D1 := falling
     oddr.io.RST := False
     oddr.io.Q
   }
 
-  val IpgBytes = 12 // IPG: IEEE 802.3 requires 12 bytes (96 bits) minimum gap between frames.
-  val PreambleBytes = 8 // 7 × 0x55 preamble + 0xd5 SFD.
-  val ipgCounter = Reg(UInt(log2Up(IpgBytes) bits)) init (IpgBytes - 1)
-  val preambleCounter = Reg(UInt(log2Up(PreambleBytes) bits)) init (PreambleBytes - 1)
+  val ipgCounter = Reg(UInt(log2Up(Rgmii.IPG_BYTES) bits)) init (Rgmii.IPG_BYTES - 1)
+  val preambleCounter = Reg(UInt(log2Up(Rgmii.PREAMBLE_SFD_BYTES) bits)) init (Rgmii.PREAMBLE_SFD_BYTES - 1)
+
+  val txDv = Reg(Bool()) init (False)
+  val txEr = Reg(Bool()) init (False)
+  val txData = Reg(Bits(8 bits)) init (0)
 
   val fsm = new StateMachine {
     val IDLE = new State with EntryPoint
     val PREAMBLE = new State
     val DATA = new State
+    val FLUSH = new State
     val IPG = new State
 
     IDLE.whenIsActive {
+      txDv := False
+      txEr := False
       when(io.input.valid) {
-        preambleCounter := PreambleBytes - 1
+        preambleCounter := Rgmii.PREAMBLE_SFD_BYTES - 1
         goto(PREAMBLE)
       }
     }
 
     PREAMBLE.whenIsActive {
+      txDv := True
+      txEr := False
+      txData := Mux(preambleCounter === 0, B(Rgmii.SFD_VALUE, 8 bits), B(Rgmii.PREAMBLE_VALUE, 8 bits))
+
       preambleCounter := preambleCounter - 1
       when(preambleCounter === 0) { goto(DATA) }
     }
 
     DATA.whenIsActive {
+      txDv := True
+      txEr := False
+      txData := io.input.fragment
+
+      when(io.input.fire) {
+        when(io.input.last) {
+          ipgCounter := Rgmii.IPG_BYTES - 1
+          goto(IPG)
+        }
+      }.otherwise {
+        txEr := True
+        goto(FLUSH)
+      }
+    }
+
+    FLUSH.whenIsActive {
+      txDv := False
+      txEr := False
+
       when(io.input.fire && io.input.last) {
-        ipgCounter := IpgBytes - 1
+        ipgCounter := Rgmii.IPG_BYTES - 1
         goto(IPG)
       }
     }
 
     IPG.whenIsActive {
+      txDv := False
+      txEr := False
+
       ipgCounter := ipgCounter - 1
-      when(ipgCounter === 0) { goto(IDLE) }
+      when(ipgCounter === 0) {
+        when(io.input.valid) {
+          preambleCounter := Rgmii.PREAMBLE_SFD_BYTES - 1
+          goto(PREAMBLE)
+        } otherwise {
+          goto(IDLE)
+        }
+      }
     }
   }
 
-  io.input.ready := fsm.isActive(fsm.DATA)
+  io.input.ready := fsm.isActive(fsm.DATA) || fsm.isActive(fsm.FLUSH)
 
-  // Output clock: D0=1, D1=0 gives 50% duty cycle at the clock frequency.
-  io.rgmii.clk := ddrOut(True, False)
+  io.rgmii.txc := ddrOut(True, False)
 
-  val txData =
-    Mux(fsm.isActive(fsm.PREAMBLE), Mux(preambleCounter === 0, B(0xd5, 8 bits), B(0x55, 8 bits)), io.input.fragment)
   for (i <- 0 until 4) {
-    io.rgmii.data(i) := ddrOut(txData(i), txData(i + 4))
+    io.rgmii.txd(i) := ddrOut(txData(i), txData(i + 4))
   }
 
-  // TX_CTL: rising = TX_EN, falling = TX_EN XOR TX_ERR. TX_ERR=0, so both edges = TX_EN.
-  val txEn = fsm.isActive(fsm.PREAMBLE) || io.input.fire
-  io.rgmii.ctl := ddrOut(txEn, txEn)
+  val txctlRise = txDv
+  val txctlFall = txDv ^ txEr
+  io.rgmii.txctl := ddrOut(txctlRise, txctlFall)
 }
 
-// ECP5 DDR input primitive.
-class IDDRX1F extends BlackBox {
+// ============================================================================
+// ECP5 BlackBox Primitives
+// ============================================================================
+
+case class IDDRX1F() extends BlackBox {
   val io = new Bundle {
     val D = in Bool ()
     val SCLK = in Bool ()
@@ -159,12 +250,10 @@ class IDDRX1F extends BlackBox {
     val Q1 = out Bool ()
   }
   noIoPrefix()
-
   mapClockDomain(clock = io.SCLK)
 }
 
-// ECP5 DDR output primitive.
-class ODDRX1F extends BlackBox {
+case class ODDRX1F() extends BlackBox {
   val io = new Bundle {
     val D0 = in Bool ()
     val D1 = in Bool ()
@@ -173,18 +262,15 @@ class ODDRX1F extends BlackBox {
     val Q = out Bool ()
   }
   noIoPrefix()
-
   mapClockDomain(clock = io.SCLK)
 }
 
-// ECP5 programmable delay primitive.
-class DELAYG(mode: String, value: Int) extends BlackBox {
+case class DELAYG(mode: String, value: Int) extends BlackBox {
   val io = new Bundle {
     val A = in Bool ()
     val Z = out Bool ()
   }
   noIoPrefix()
-
   addGeneric("DEL_MODE", mode)
   addGeneric("DEL_VALUE", value)
 }

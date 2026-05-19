@@ -4,7 +4,7 @@ import lime.util._
 import spinal.core._
 import spinal.lib._
 
-class StaticPacketGen extends Component {
+case class StaticPacketGen() extends Component {
   val io = new Bundle {
     val output = master Stream (Fragment(Byte))
   }

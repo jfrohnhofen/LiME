@@ -14,7 +14,6 @@ object Config
     ) {
 
   def main(args: Array[String]): Unit = {
-    val clazz = Class.forName(args(0))
-    generateVerilog(clazz.getDeclaredConstructor().newInstance().asInstanceOf[Component])
+    generateVerilog(Class.forName(args(0)).getDeclaredConstructor().newInstance().asInstanceOf[Component])
   }
 }

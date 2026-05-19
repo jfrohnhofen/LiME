@@ -2,63 +2,54 @@ package lime.util
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.fsm._
 
-class UartTx(baudRate: Int) extends Component {
-  object State extends SpinalEnum {
-    val IDLE, START, DATA, STOP = newElement()
-  }
-  import State._
-
+case class UartTx(baudRate: Int) extends Component {
   val io = new Bundle {
-    val tx = out Bool ()
-    val write = slave Stream (Byte)
+    val tx = out(Bool())
+    val write = slave(Stream(Byte))
   }
 
   val ticksPerBit = (ClockDomain.current.frequency.getValue / baudRate).toInt
   val counter = CounterFreeRun(ticksPerBit)
-  val stopCounter = CounterFreeRun(16 * ticksPerBit)
   val bitIndex = Reg(UInt(3 bits))
   val payload = Reg(Byte)
 
-  val state = RegInit(IDLE)
-  io.write.ready := state === IDLE
+  val fsm = new StateMachine {
+    val IDLE = new State with EntryPoint
+    val START = new State
+    val DATA = new State
+    val STOP = new State
 
-  switch(state) {
-    is(IDLE) {
-      io.tx := True
+    IDLE.whenIsActive {
       when(io.write.fire) {
         payload := io.write.payload
-        state := START
         counter.clear()
+        goto(START)
       }
     }
 
-    is(START) {
-      io.tx := False
+    START.whenIsActive {
       when(counter.willOverflow) {
-        state := DATA
         counter.clear()
         bitIndex := 0
+        goto(DATA)
       }
     }
 
-    is(DATA) {
-      io.tx := payload(bitIndex)
+    DATA.whenIsActive {
       when(counter.willOverflow) {
-        when(bitIndex === 8 - 1) {
-          stopCounter.clear()
-          state := STOP
-        }
-        bitIndex := bitIndex + 1
         counter.clear()
+        when(bitIndex === 7) { goto(STOP) }
+        bitIndex := bitIndex + 1
       }
     }
 
-    is(STOP) {
-      io.tx := True
-      when(stopCounter.willOverflow) {
-        state := IDLE
-      }
+    STOP.whenIsActive {
+      when(counter.willOverflow) { goto(IDLE) }
     }
   }
+
+  io.write.ready := fsm.isActive(fsm.IDLE)
+  io.tx := !fsm.isActive(fsm.START) && (fsm.isActive(fsm.DATA) ? payload(bitIndex) | True)
 }
