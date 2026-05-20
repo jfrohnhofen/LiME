@@ -46,8 +46,11 @@ case class BridgePath() extends Component {
   val udp = UdpRx()
   udp.io.input <-< ip.io.output.throwWhen(ip.io.header.protocol =/= Udp.PROTOCOL_ID)
 
+  val sacn = SacnRx()
+  sacn.io.input <-< udp.io.output
+
   val sniffer = FrameSniffer(4096)
-  sniffer.io.tap <-< udp.io.output
+  sniffer.io.tap <-< sacn.io.output
 
   val uartTx = UartTx(1_000_000)
   uartTx.io.write << sniffer.io.output
