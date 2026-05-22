@@ -10,6 +10,10 @@ case class BridgePath() extends Component {
     val rx = in(Rgmii.Rx())
     val tx = out(Rgmii.Tx())
     val uart = out(Bool())
+
+    // val sacnCmd = master(Flow(WriteCmd()))
+    // val sacnSync = out Bool ()
+    // val sacnSyncAddr = out UInt (16 bits)
   }
 
   // RX stream
@@ -41,18 +45,29 @@ case class BridgePath() extends Component {
   eth.io.input <-< fifo.io.pop.toFlowFire
 
   val ip = Ipv4Rx()
-  ip.io.input <-< eth.io.output.throwWhen(eth.io.header.etherType =/= Ipv4.ETHER_TYPE)
+  ip.io.input <-< eth.io.output.throwWhen(eth.io.output.eth.etherType =/= Ipv4.ETHER_TYPE)
 
   val udp = UdpRx()
-  udp.io.input <-< ip.io.output.throwWhen(ip.io.header.protocol =/= Udp.PROTOCOL_ID)
+  udp.io.input <-< ip.io.output.throwWhen(ip.io.output.ip.protocol =/= Udp.PROTOCOL_ID)
 
   val sacn = SacnRx()
-  sacn.io.input <-< udp.io.output
+  sacn.io.input <-< udp.io.output.throwWhen(udp.io.output.udp.dstPort =/= Sacn.PORT)
 
   val sniffer = FrameSniffer(4096)
-  sniffer.io.tap <-< sacn.io.output
+  sniffer.io.tap <-< sacn.io.output.payload
 
   val uartTx = UartTx(1_000_000)
   uartTx.io.write << sniffer.io.output
   io.uart := uartTx.io.tx
+
+//  val writer = Writer(pathId)
+//  writer.io.input.valid := sacn.io.output.valid
+//  writer.io.input.payload.fragment := sacn.io.output.fragment
+//  writer.io.input.payload.last := sacn.io.output.last
+//  writer.io.header := sacn.io.header
+//  io.sacnCmd <> writer.io.cmd
+
+//  io.sacnSync := sacn.io.sync
+//  io.sacnSyncAddr := sacn.io.header.syncAddress
+
 }

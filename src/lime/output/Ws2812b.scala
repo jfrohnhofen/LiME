@@ -3,8 +3,13 @@ package lime.output
 import spinal.core._
 import spinal.lib._
 
-case class Ws2812b(val startUniverse: Int, val numLeds: Int, val bytesPerLed: Int, val allowUniverseSpanning: Boolean)
-    extends Component
+case class Ws2812b(
+    val startUniverse: Int,
+    val numLeds: Int,
+    val bytesPerLed: Int,
+    val syncUniverse: Option[Int],
+    val allowUniverseSpanning: Boolean
+) extends Component
     with Output {
   val numUniverses = {
     val numBytes = numLeds * bytesPerLed
@@ -12,7 +17,7 @@ case class Ws2812b(val startUniverse: Int, val numLeds: Int, val bytesPerLed: In
     java.lang.Math.ceilDiv(numBytes, bytesPerUniverse)
   }
 
-  override def sacnUniverses = (0 to numUniverses).map(_ + startUniverse)
+  override def universes = (0 until numUniverses).map(i => UniverseConfig(i + startUniverse, syncUniverse))
 
   val io = new Bundle {
     val pin = out Bool ()
@@ -27,9 +32,10 @@ object Ws2812b {
       startUniverse: Int,
       numLeds: Int,
       bytesPerLed: Int = 3,
+      syncUniverse: Option[Int] = None,
       allowUniverseSpanning: Boolean = false
   ): Ws2812b = {
-    val ws = Ws2812b(startUniverse, numLeds, bytesPerLed, allowUniverseSpanning)
+    val ws = Ws2812b(startUniverse, numLeds, bytesPerLed, syncUniverse, allowUniverseSpanning)
     pin := ws.io.pin
     ws
   }

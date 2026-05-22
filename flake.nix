@@ -22,12 +22,13 @@
           buildInputs = with pkgs; [
             jdk
             mill
-	    yosys
+	          yosys
             nextpnr
             trellis
             openfpgaloader
             gtkwave
             verilator
+            iperf3
           ];
         };
       }

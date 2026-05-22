@@ -6,20 +6,14 @@ import spinal.lib._
 
 object Sacn {
   final val PORT = 5568
-
-  object PacketType extends SpinalEnum {
-    val Data, Sync = newElement()
-  }
 }
 
 case class SacnHeader() extends Bundle {
-  val packetType = Sacn.PacketType()
   val universe = UInt(16 bits)
-  val priority = UInt(8 bits) // data packets only
+  val priority = UInt(8 bits)
   val syncAddress = UInt(16 bits)
-  val seqNumber = UInt(8 bits)
-  val options = Bits(8 bits)   // data packets only
-  val propCount = UInt(10 bits) // data packets only; includes start code, so DMX channels = propCount - 1
+  val options = Bits(8 bits)
+  val propCount = UInt(10 bits)
 }
 
 // Parses sACN (E1.31) packets from a UDP payload byte stream.
@@ -57,61 +51,44 @@ case class SacnHeader() extends Bundle {
 //   [45-46] Sync Address       → io.sync fires one cycle after byte 46
 case class SacnRx() extends Component {
   val io = new Bundle {
-    val input = slave(Flow(Fragment(Byte)))
-    val output = master(Flow(Fragment(Byte)))
-    val sync = out(Bool())
-    val header = out(SacnHeader())
+    val input = slave(Packet())
+    val output = master(Packet())
   }
 
-  import Sacn.PacketType._
-
-  // Counts bytes within the current UDP payload packet (resets to 0 after last)
+  val header = Reg(SacnHeader()) init SacnHeader().getZero
   val byteIdx = Reg(UInt(10 bits)) init 0
 
   // Cleared on any protocol violation; reset to True at the first byte of each new packet
   val isValid = Reg(Bool()) init True
-  val isData = Reg(Bool()) init True // True for Data packets, False for Sync
-
-  val universe = Reg(UInt(16 bits)) init 0
-  val priority = Reg(UInt(8 bits)) init 0
-  val syncAddr = Reg(UInt(16 bits)) init 0
-  val seqNum = Reg(UInt(8 bits)) init 0
-  val options = Reg(Bits(8 bits)) init 0
-  val packetType = Reg(Sacn.PacketType()) init Data
+  val isData = Reg(Bool()) init True // True for Data packets, False for Sync packets
 
   // F&L length fields (low 12 bits of each Flags & Length word)
-  val rootLen    = Reg(UInt(12 bits)) init 0
+  val rootLen = Reg(UInt(12 bits)) init 0
   val framingLen = Reg(UInt(12 bits)) init 0
-  val dmpLen     = Reg(UInt(12 bits)) init 0
+  val dmpLen = Reg(UInt(12 bits)) init 0
 
   // propCount includes the start code byte, so DMX channels = propCount - 1
-  val propCount  = Reg(UInt(10 bits)) init 0
-  val lastDmxIdx = Reg(UInt(10 bits)) init 0  // byteIdx of last DMX byte
-
-  io.header.packetType := packetType
-  io.header.universe := universe
-  io.header.priority := priority
-  io.header.syncAddress := syncAddr
-  io.header.seqNumber := seqNum
-  io.header.options := options
-  io.header.propCount := propCount
+  val propCount = Reg(UInt(10 bits)) init 0
+  val lastDmxIdx = Reg(UInt(10 bits)) init 0 // byteIdx of last DMX byte
 
   // DMX data stream: valid Data packets, byte 126 through lastDmxIdx (= 124 + propCount)
-  io.output.valid    := io.input.valid && isValid && isData && byteIdx >= 126 && byteIdx <= lastDmxIdx
-  io.output.fragment := io.input.fragment
-  io.output.last     := io.input.valid && isValid && isData && (byteIdx === lastDmxIdx || io.input.last)
+  io.output.payload.fragment := io.input.payload.fragment
+  io.output.payload.last := io.input.payload.valid && isValid && isData && (byteIdx === lastDmxIdx || io.input.payload.last)
+  io.output.payload.valid := io.input.payload.valid && isValid && isData && byteIdx >= 126 && byteIdx <= lastDmxIdx
+  io.output.eth := io.input.eth
+  io.output.ip := io.input.ip
+  io.output.udp := io.input.udp
+  io.output.sacn := header
 
   // Delayed one cycle so syncAddress captures the final byte before consumer reads it
-  val syncReg = Reg(Bool()) init False
-  syncReg := io.input.valid && io.input.last && isValid && !isData && byteIdx >= 46
-  io.sync := syncReg
-
-  val byte = io.input.fragment
+  // val syncReg = Reg(Bool()) init False
+  // syncReg := io.input.payload.valid && io.input.payload.last && isValid && !isData && byteIdx >= 46
+  // io.sync := syncReg
 
   // ACN Packet Identifier: "ASC-E1.17\0\0\0"
   val ACN_ID = Seq(0x41, 0x53, 0x43, 0x2d, 0x45, 0x31, 0x2e, 0x31, 0x37, 0x00, 0x00, 0x00)
 
-  when(io.input.valid) {
+  when(io.input.payload.valid) {
     // Optimistically assume valid at packet start; checks below may override to False.
     // This ordering is intentional: isValid/isData assignments here come first, so
     // any failing check later in this block wins (SpinalHDL last-assignment semantics).
@@ -120,113 +97,123 @@ case class SacnRx() extends Component {
       isData := True
     }
 
+    val payload = io.input.payload.fragment.asUInt
+
     // Root Layer preamble: 0x0010
-    when(byteIdx === 0 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 1 && byte.asUInt =/= 0x10) { isValid := False }
+    when(byteIdx === 0 && payload =/= 0x00) { isValid := False }
+    when(byteIdx === 1 && payload =/= 0x10) { isValid := False }
 
     // Root Layer postamble: 0x0000
-    when(byteIdx === 2 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 3 && byte.asUInt =/= 0x00) { isValid := False }
+    when(byteIdx === 2 && payload =/= 0x00) { isValid := False }
+    when(byteIdx === 3 && payload =/= 0x00) { isValid := False }
 
     // ACN Packet Identifier (bytes 4-15)
     for ((b, i) <- ACN_ID.zipWithIndex) {
-      when(byteIdx === (4 + i) && byte.asUInt =/= b) { isValid := False }
+      when(byteIdx === (4 + i) && payload =/= b) { isValid := False }
     }
 
     // Root Layer Flags & Length: check flags nibble, capture 12-bit length
     when(byteIdx === 16) {
-      when(byte(7 downto 4).asUInt =/= 7) { isValid := False }
-      rootLen(11 downto 8) := byte(3 downto 0).asUInt
+      when(payload.nibble(1) =/= 7) { isValid := False }
+      rootLen.nibble(2) := payload.nibble(0)
     }
-    when(byteIdx === 17) { rootLen(7 downto 0) := byte.asUInt }
+    when(byteIdx === 17) { rootLen.byte(0) := payload }
 
     // Root Layer Vector (bytes 18-21): 0x00000004 (Data) or 0x00000008 (Sync)
-    when(byteIdx === 18 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 19 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 20 && byte.asUInt =/= 0x00) { isValid := False }
+    when(byteIdx === 18 && payload =/= 0x00) { isValid := False }
+    when(byteIdx === 19 && payload =/= 0x00) { isValid := False }
+    when(byteIdx === 20 && payload =/= 0x00) { isValid := False }
     when(byteIdx === 21) {
-      when(byte.asUInt =/= 0x04 && byte.asUInt =/= 0x08) { isValid := False }
-      isData := (byte.asUInt === 0x04)
-      when(byte.asUInt === 0x04) { packetType := Data }
-        .otherwise { packetType := Sync }
+      when(payload =/= 0x04 && payload =/= 0x08) { isValid := False }
+      isData := (payload === 0x04)
     }
 
     // Framing Layer Flags & Length: check flags nibble, capture 12-bit length (common)
     when(byteIdx === 38) {
-      when(byte(7 downto 4).asUInt =/= 7) { isValid := False }
-      framingLen(11 downto 8) := byte(3 downto 0).asUInt
+      when(payload.nibble(1) =/= 7) { isValid := False }
+      framingLen.nibble(2) := payload.nibble(0)
     }
-    when(byteIdx === 39) { framingLen(7 downto 0) := byte.asUInt }
+    when(byteIdx === 39) { framingLen.byte(0) := payload }
 
     // Framing Layer Vector (bytes 40-43): first 3 bytes are 0x00 for both packet types
-    when(byteIdx === 40 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 41 && byte.asUInt =/= 0x00) { isValid := False }
-    when(byteIdx === 42 && byte.asUInt =/= 0x00) { isValid := False }
-
-    // Sync packet: fixed sizes rootLen=31 (47-16), framingLen=9 (47-38); vector[3]=0x01; fields
-    when(!isData) {
-      when(byteIdx === 40) {
-        when(rootLen    =/= 31) { isValid := False }
-        when(framingLen =/= 9)  { isValid := False }
-      }
-      when(byteIdx === 43 && byte.asUInt =/= 0x01) { isValid := False }
-      when(byteIdx === 44) { seqNum                := byte.asUInt }
-      when(byteIdx === 45) { syncAddr(15 downto 8) := byte.asUInt }
-      when(byteIdx === 46) { syncAddr(7 downto 0)  := byte.asUInt }
+    when(byteIdx === 40) {
+      when(payload =/= 0x00) { isValid := False }
+      when(rootLen =/= framingLen + 22) { isValid := False }
     }
+    when(byteIdx === 41 && payload =/= 0x00) { isValid := False }
+    when(byteIdx === 42 && payload =/= 0x00) { isValid := False }
 
     // Data packet: vector[3]=0x02; source name (44-107) skipped; framing fields; DMP layer
     when(isData) {
-      when(byteIdx === 43 && byte.asUInt =/= 0x02) { isValid := False }
+      when(byteIdx === 43 && payload =/= 0x02) { isValid := False }
 
-      when(byteIdx === 108) { priority := byte.asUInt }
-      when(byteIdx === 109) { syncAddr(15 downto 8) := byte.asUInt }
-      when(byteIdx === 110) { syncAddr(7 downto 0) := byte.asUInt }
-      when(byteIdx === 111) { seqNum := byte.asUInt }
-      when(byteIdx === 112) { options := byte }
-      when(byteIdx === 113) { universe(15 downto 8) := byte.asUInt }
-      when(byteIdx === 114) { universe(7 downto 0) := byte.asUInt }
+      when(byteIdx === 108) { header.priority := payload }
+      when(byteIdx === 109) { header.syncAddress.byte(1) := payload }
+      when(byteIdx === 110) { header.syncAddress.byte(0) := payload }
+      when(byteIdx === 112) { header.options := payload.asBits }
+      when(byteIdx === 113) {
+        when(payload =/= io.input.eth.dstMac.byte(1).asUInt) { isValid := False }
+        when(payload =/= io.input.ip.dstIp.byte(1).asUInt) { isValid := False }
+        header.universe.byte(1) := payload
+      }
+      when(byteIdx === 114) {
+        when(payload =/= io.input.eth.dstMac.byte(0).asUInt) { isValid := False }
+        when(payload =/= io.input.ip.dstIp.byte(0).asUInt) { isValid := False }
+        header.universe.byte(0) := payload
+      }
 
       // DMP Layer Flags & Length: check flags nibble, capture 12-bit length
       when(byteIdx === 115) {
-        when(byte(7 downto 4).asUInt =/= 7) { isValid := False }
-        dmpLen(11 downto 8) := byte(3 downto 0).asUInt
+        when(payload.nibble(1) =/= 7) { isValid := False }
+        dmpLen.nibble(2) := payload.nibble(0)
       }
-      when(byteIdx === 116) { dmpLen(7 downto 0) := byte.asUInt }
+      when(byteIdx === 116) { dmpLen.byte(0) := payload }
 
       // DMP Layer Vector: 0x02
-      when(byteIdx === 117 && byte.asUInt =/= 0x02) { isValid := False }
+      when(byteIdx === 117) {
+        when(payload =/= 0x02) { isValid := False }
+        when(framingLen =/= dmpLen + 77) { isValid := False }
+      }
 
       // Address Type & Data Type: 0xa1 (relative addressing, unsigned DMX)
-      when(byteIdx === 118 && byte.asUInt =/= 0xa1) { isValid := False }
+      when(byteIdx === 118 && payload =/= 0xa1) { isValid := False }
 
       // First Property Address: 0x0000
-      when(byteIdx === 119 && byte.asUInt =/= 0x00) { isValid := False }
-      when(byteIdx === 120 && byte.asUInt =/= 0x00) { isValid := False }
+      when(byteIdx === 119 && payload =/= 0x00) { isValid := False }
+      when(byteIdx === 120 && payload =/= 0x00) { isValid := False }
 
       // Address Increment: 0x0001
-      when(byteIdx === 121 && byte.asUInt =/= 0x00) { isValid := False }
-      when(byteIdx === 122 && byte.asUInt =/= 0x01) { isValid := False }
+      when(byteIdx === 121 && payload =/= 0x00) { isValid := False }
+      when(byteIdx === 122 && payload =/= 0x01) { isValid := False }
 
       // Property Count (bytes 123-124)
-      when(byteIdx === 123) { propCount(9 downto 8) := byte(1 downto 0).asUInt }
-      when(byteIdx === 124) { propCount(7 downto 0) := byte.asUInt }
+      when(byteIdx === 123) { propCount(9 downto 8) := payload(1 downto 0) }
+      when(byteIdx === 124) { propCount.byte(0) := payload }
 
       // Start Code (byte 125): cross-validate F&L lengths now that propCount is registered,
       // compute lastDmxIdx, and check the null start code
       // rootLen = propCount + 109, framingLen = propCount + 87, dmpLen = propCount + 10
       when(byteIdx === 125) {
-        when(byte.asUInt =/= 0x00) { isValid := False }
-        when(rootLen    =/= (propCount + 109).resize(12)) { isValid := False }
-        when(framingLen =/= (propCount + 87).resize(12))  { isValid := False }
-        when(dmpLen     =/= (propCount + 10).resize(12))  { isValid := False }
-        lastDmxIdx := (propCount + 124).resize(10)
+        when(payload =/= 0x00) { isValid := False }
+        when(dmpLen =/= propCount + 10) { isValid := False }
+        lastDmxIdx := propCount + 124
       }
 
       // Bytes 126+: DMX channel data, forwarded via io.output
     }
 
-    when(io.input.last) { byteIdx := 0 }
+    // Sync packet: fixed sizes rootLen=31 (47-16), framingLen=9 (47-38); vector[3]=0x01; fields
+    when(!isData) {
+      when(byteIdx === 40) {
+        when(rootLen =/= 31) { isValid := False }
+        when(framingLen =/= 9) { isValid := False }
+      }
+      when(byteIdx === 43 && payload =/= 0x01) { isValid := False }
+      when(byteIdx === 45) { header.syncAddress.byte(1) := payload }
+      when(byteIdx === 46) { header.syncAddress.byte(0) := payload }
+    }
+
+    when(io.input.payload.last) { byteIdx := 0 }
       .otherwise { byteIdx := byteIdx + 1 }
   }
 }

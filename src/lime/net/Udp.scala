@@ -20,31 +20,31 @@ case class UdpRx() extends Component {
   final val PAYLOAD_OFFSET = 8
 
   val io = new Bundle {
-    val input = slave(Flow(Fragment(Byte)))
-    val output = master(Flow(Fragment(Byte)))
-    val header = out(UdpHeader())
+    val input = slave(Packet())
+    val output = master(Packet())
   }
 
+  val header = Reg(UdpHeader()) init UdpHeader().getZero
   val byteIdx = Reg(UInt(4 bits)) init 0
 
-  val srcPort = Reg(Bits(16 bits))
-  val dstPort = Reg(Bits(16 bits))
+  io.output.payload.fragment := io.input.payload.fragment
+  io.output.payload.last := io.input.payload.last && byteIdx >= PAYLOAD_OFFSET
+  io.output.payload.valid := io.input.payload.valid && byteIdx >= PAYLOAD_OFFSET
+  io.output.eth := io.input.eth
+  io.output.ip := io.input.ip
+  io.output.udp := header
 
-  io.header.srcPort := srcPort
-  io.header.dstPort := dstPort
-
-  io.output.valid := io.input.valid && byteIdx >= PAYLOAD_OFFSET
-  io.output.fragment := io.input.fragment
-  io.output.last := io.input.last && byteIdx >= PAYLOAD_OFFSET
-
-  when(io.input.valid) {
-    when(io.input.last) {
+  when(io.input.payload.valid) {
+    val payload = io.input.payload.fragment
+    when(io.input.payload.last) {
       byteIdx := 0
     } otherwise {
       when(byteIdx >= SRC_PORT_OFFSET && byteIdx < DST_PORT_OFFSET) {
-        srcPort := (srcPort ## io.input.fragment).resized
+        header.srcPort := header.srcPort #<< payload
       }
-      when(byteIdx >= DST_PORT_OFFSET && byteIdx < LENGTH_OFFSET) { dstPort := (dstPort ## io.input.fragment).resized }
+      when(byteIdx >= DST_PORT_OFFSET && byteIdx < LENGTH_OFFSET) {
+        header.dstPort := header.dstPort #<< payload
+      }
       when(byteIdx < PAYLOAD_OFFSET) { byteIdx := byteIdx + 1 }
     }
   }
