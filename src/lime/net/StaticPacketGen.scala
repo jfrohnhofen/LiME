@@ -4,6 +4,35 @@ import lime.util._
 import spinal.core._
 import spinal.lib._
 
+case class MacAddr(octets: Seq[Int]) {
+  require(octets.length == 6 && octets.forall(o => o >= 0 && o <= 0xff))
+  override def toString: String = octets.map("%02X".format(_)).mkString(":")
+}
+
+object MacAddr {
+  def apply(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int): MacAddr = MacAddr(Seq(a, b, c, d, e, f))
+
+  def apply(s: String): MacAddr = {
+    val parts = s.split(':')
+    MacAddr(parts.map(Integer.parseInt(_, 16)))
+  }
+}
+
+case class IpAddr(octets: Seq[Int]) {
+  require(octets.length == 4 && octets.forall(o => o >= 0 && o <= 0xff))
+  override def toString: String = octets.mkString(".")
+}
+
+object IpAddr {
+  def apply(a: Int, b: Int, c: Int, d: Int): IpAddr = IpAddr(Seq(a, b, c, d))
+
+  def apply(s: String): IpAddr = {
+    val parts = s.split('.')
+    require(parts.length == 4, s"Expected a.b.c.d, got '$s'")
+    IpAddr(parts.map(_.toInt))
+  }
+}
+
 case class StaticPacketGen() extends Component {
   val io = new Bundle {
     val output = master Stream (Fragment(Byte))
