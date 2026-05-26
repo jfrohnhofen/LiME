@@ -1,0 +1,9 @@
+repos:
+-   repo: local
+    hooks:
+    -   id: mill-format
+        name: mill format
+        entry: mill format
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

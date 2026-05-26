@@ -4,19 +4,19 @@ import spinal.core._
 
 case class Pll() extends Component {
   val io = new Bundle {
-    val clk = in Bool()
-    val clk_125Mhz = out Bool()
-    val clk_100Mhz = out Bool()
-    val clk_100Mhz_90deg = out Bool()
-    val lock = out Bool()
-  }  
+    val clk = in Bool ()
+    val clk_125Mhz = out Bool ()
+    val clk_100Mhz = out Bool ()
+    val clk_100Mhz_90deg = out Bool ()
+    val lock = out Bool ()
+  }
 
   val ehxplll = EHXPLLL()
   ehxplll.io.CLKI := io.clk
   ehxplll.io.CLKFB := ehxplll.io.CLKOP
   ehxplll.io.RST := False
   ehxplll.io.STDBY := False
-  
+
   io.clk_125Mhz := ehxplll.io.CLKOP
   io.clk_100Mhz := ehxplll.io.CLKOS
   io.clk_100Mhz_90deg := ehxplll.io.CLKOS2
