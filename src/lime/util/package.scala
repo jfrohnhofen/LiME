@@ -7,6 +7,7 @@ package object util {
   def Byte = Bits(8 bits)
 
   implicit class BitsByteAccess(val x: Bits) {
+    def takeHigh(n: Int): Bits = x(x.high downto x.getWidth - n)
     def byte(index: Int): Bits = {
       val high = index * 8 + 7
       val low = index * 8

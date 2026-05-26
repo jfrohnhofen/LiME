@@ -12,7 +12,7 @@ case class FrameSniffer(val fifoDepth: Int = 4096) extends Component {
   }
 
   val fifo = StreamFifo(Byte, fifoDepth)
-  io.output << fifo.io.pop
+  io.output << fifo.io.pop.m2sPipe()
 
   val dropping = RegInit(False)
   val isFirstBeat = RegInit(True)

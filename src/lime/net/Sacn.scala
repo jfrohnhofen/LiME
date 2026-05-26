@@ -6,6 +6,8 @@ import spinal.lib._
 
 object Sacn {
   final val PORT = 5568
+  val MAC_PREFIX = B"32'x01005E7E"
+  val IP_PREFIX = B"16'xEFFF"
 }
 
 case class SacnHeader() extends Bundle {

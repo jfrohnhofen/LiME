@@ -52,7 +52,11 @@ case class BridgePath() extends Component {
   udp.io.input <-< ip.io.output.throwWhen(ip.io.output.ip.protocol =/= Udp.PROTOCOL_ID)
 
   val sacn = SacnRx()
-  sacn.io.input <-< udp.io.output.throwWhen(udp.io.output.udp.dstPort =/= Sacn.PORT)
+  sacn.io.input <-< udp.io.output.throwWhen(
+    udp.io.output.udp.dstPort =/= Sacn.PORT ||
+      udp.io.output.eth.dstMac.takeHigh(Sacn.MAC_PREFIX.getWidth) =/= Sacn.MAC_PREFIX ||
+      udp.io.output.ip.dstIp.takeHigh(Sacn.IP_PREFIX.getWidth) =/= Sacn.IP_PREFIX
+  )
 
   val sniffer = FrameSniffer(4096)
   sniffer.io.tap <-< sacn.io.output.payload
