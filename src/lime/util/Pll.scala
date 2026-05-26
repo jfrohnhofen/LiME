@@ -28,7 +28,7 @@ case class Pll() extends Component {
 // CLKOP  = VCO / 4 = 125 MHz
 // CLKOS  = VCO / 5 = 100 MHz
 // CLKOS2 = VCO / 5 = 100 MHz
-case class EHXPLLL() extends BlackBox {
+protected case class EHXPLLL() extends BlackBox {
   val io = new Bundle {
     val CLKI = in Bool ()
     val CLKFB = in Bool ()

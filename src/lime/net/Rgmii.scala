@@ -241,7 +241,7 @@ case class RgmiiTx() extends Component {
 // ECP5 BlackBox Primitives
 // ============================================================================
 
-case class IDDRX1F() extends BlackBox {
+protected case class IDDRX1F() extends BlackBox {
   val io = new Bundle {
     val D = in Bool ()
     val SCLK = in Bool ()
@@ -253,7 +253,7 @@ case class IDDRX1F() extends BlackBox {
   mapClockDomain(clock = io.SCLK)
 }
 
-case class ODDRX1F() extends BlackBox {
+protected case class ODDRX1F() extends BlackBox {
   val io = new Bundle {
     val D0 = in Bool ()
     val D1 = in Bool ()
@@ -265,7 +265,7 @@ case class ODDRX1F() extends BlackBox {
   mapClockDomain(clock = io.SCLK)
 }
 
-case class DELAYG(mode: String, value: Int) extends BlackBox {
+protected case class DELAYG(mode: String, value: Int) extends BlackBox {
   val io = new Bundle {
     val A = in Bool ()
     val Z = out Bool ()

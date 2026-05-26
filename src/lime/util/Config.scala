@@ -14,6 +14,8 @@ object Config
     ) {
 
   def main(args: Array[String]): Unit = {
-    generateVerilog(Class.forName(args(0)).getDeclaredConstructor().newInstance().asInstanceOf[Component])
+    val report = generateVerilog(Class.forName(args(0)).getDeclaredConstructor().newInstance().asInstanceOf[Component])
+    report.printPruned()
+    report.printPrunedIo()
   }
 }
