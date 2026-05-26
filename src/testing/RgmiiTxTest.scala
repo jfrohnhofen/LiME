@@ -11,13 +11,6 @@ class RgmiiTxTest extends Component {
   }
   noIoPrefix()
 
-  // PLL: 25 MHz system clock → 125 MHz TX clock
-  val pll = Pll25to125()
-  pll.io.CLKI := ClockDomain.current.readClockWire
-  pll.io.CLKFB := pll.io.CLKOP // internal feedback
-  pll.io.RST := False
-  pll.io.STDBY := False
-
   val frameBytes: Seq[Int] = Seq(
     // Destination MAC (Broadcast)
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -43,8 +36,12 @@ class RgmiiTxTest extends Component {
     0x9b, 0xf8, 0x2c, 0x5b
   )
 
+  // PLL: 25 MHz system clock → 125 MHz TX clock
+  val pll = Pll()
+  pll.io.clk := ClockDomain.current.readClockWire
+
   val txClockDomain = ClockDomain(
-    clock = pll.io.CLKOP,
+    clock = pll.io.clk_125Mhz,
     config = ClockDomainConfig(resetKind = BOOT)
   )
 

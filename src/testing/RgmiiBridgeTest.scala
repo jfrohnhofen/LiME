@@ -13,14 +13,11 @@ class RgmiiBridgeTest extends Component {
   }
   noIoPrefix()
 
-  val pll = Pll25to125()
-  pll.io.CLKI := ClockDomain.current.readClockWire
-  pll.io.CLKFB := pll.io.CLKOP
-  pll.io.RST := False
-  pll.io.STDBY := False
+  val pll = Pll()
+  pll.io.clk := ClockDomain.current.readClockWire
 
   val systemClock = ClockDomain(
-    clock = pll.io.CLKOP,
+    clock = pll.io.clk_125Mhz,
     config = ClockDomainConfig(resetKind = BOOT)
   )
 

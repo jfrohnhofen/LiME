@@ -25,15 +25,13 @@ abstract class Controller extends Component {
   def universes: Seq[UniverseConfig] = this.children.collect { case m: Output => m }.flatMap(_.universes).toSeq
 
   // PLL: 25 MHz board clock → 125 MHz system clock
-  private val pll = Pll25to125()
-  pll.io.CLKI := ClockDomain.current.readClockWire
-  pll.io.CLKFB := pll.io.CLKOP
-  pll.io.RST := False
-  pll.io.STDBY := False
+  private val pll = Pll()
+  pll.io.clk := ClockDomain.current.readClockWire
 
   protected val systemClock = ClockDomain(
-    clock = pll.io.CLKOP,
-    config = ClockDomainConfig(resetKind = BOOT),
+    clock = pll.io.clk_125Mhz,
+    reset = !pll.io.lock,
+    config = ClockDomainConfig(resetKind = ASYNC),
     frequency = FixedFrequency(125 MHz)
   )
 
