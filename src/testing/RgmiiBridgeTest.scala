@@ -13,13 +13,8 @@ class RgmiiBridgeTest extends Component {
   }
   noIoPrefix()
 
-  val pll = Pll()
-  pll.io.clk := ClockDomain.current.readClockWire
-
-  val systemClock = ClockDomain(
-    clock = pll.io.clk_125Mhz,
-    config = ClockDomainConfig(resetKind = BOOT)
-  )
+  val clocks = Clocking()
+  clocks.io.clk := ClockDomain.current.readClockWire
 
   // phy0 RX → phy1 TX
   val rx0 = new RgmiiRx()
@@ -29,11 +24,11 @@ class RgmiiBridgeTest extends Component {
     dataType = Fragment(Byte),
     depth = 128,
     pushClock = rx0.rxClockDomain,
-    popClock = systemClock
+    popClock = clocks.network
   )
   fifo0.io.push << rx0.io.output
 
-  new ClockingArea(systemClock) {
+  new ClockingArea(clocks.network) {
     val tx1 = RgmiiTx()
     tx1.io.rgmii <> io.phy1.tx
     tx1.io.input << fifo0.io.pop.m2sPipe()
@@ -47,11 +42,11 @@ class RgmiiBridgeTest extends Component {
     dataType = Fragment(Byte),
     depth = 128,
     pushClock = rx1.rxClockDomain,
-    popClock = systemClock
+    popClock = clocks.network
   )
   fifo1.io.push << rx1.io.output
 
-  new ClockingArea(systemClock) {
+  new ClockingArea(clocks.network) {
     val tx0 = RgmiiTx()
     tx0.io.rgmii <> io.phy0.tx
     tx0.io.input << fifo1.io.pop.m2sPipe()

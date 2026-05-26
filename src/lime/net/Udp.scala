@@ -24,7 +24,7 @@ case class UdpRx() extends Component {
     val output = master(Packet())
   }
 
-  val header = Reg(UdpHeader()) init UdpHeader().getZero
+  val header = Reg(UdpHeader())
   val byteIdx = Reg(UInt(4 bits)) init 0
 
   io.output.payload.fragment := io.input.payload.fragment

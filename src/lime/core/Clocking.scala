@@ -1,33 +1,54 @@
 package lime.util
 
 import spinal.core._
+import spinal.lib._
 
-case class Pll() extends Component {
+case class Clocking() extends Component {
   val io = new Bundle {
     val clk = in Bool ()
-    val clk_125Mhz = out Bool ()
-    val clk_100Mhz = out Bool ()
-    val clk_100Mhz_90deg = out Bool ()
-    val lock = out Bool ()
+    val sdramClk = out Bool ()
   }
 
-  val ehxplll = EHXPLLL()
-  ehxplll.io.CLKI := io.clk
-  ehxplll.io.CLKFB := ehxplll.io.CLKOP
-  ehxplll.io.RST := False
-  ehxplll.io.STDBY := False
+  val pll = EHXPLLL()
+  pll.io.CLKI := io.clk
+  pll.io.CLKFB := pll.io.CLKOP
+  pll.io.RST := False
+  pll.io.STDBY := False
 
-  io.clk_125Mhz := ehxplll.io.CLKOP
-  io.clk_100Mhz := ehxplll.io.CLKOS
-  io.clk_100Mhz_90deg := ehxplll.io.CLKOS2
-  io.lock := ehxplll.io.LOCK
+  io.sdramClk := pll.io.CLKOS2
+
+  val network = ClockDomain(
+    clock = pll.io.CLKOP,
+    frequency = FixedFrequency(125 MHz),
+    config = ClockDomainConfig(
+      clockEdge = RISING,
+      resetKind = ASYNC
+    ),
+    reset = ResetCtrl.asyncAssertSyncDeassert(
+      input = pll.io.LOCK,
+      clockDomain = ClockDomain(clock = pll.io.CLKOP)
+    )
+  )
+
+  val system = ClockDomain(
+    clock = pll.io.CLKOS,
+    frequency = FixedFrequency(100 MHz),
+    config = ClockDomainConfig(
+      clockEdge = RISING,
+      resetKind = ASYNC
+    ),
+    reset = ResetCtrl.asyncAssertSyncDeassert(
+      input = pll.io.LOCK,
+      clockDomain = ClockDomain(clock = pll.io.CLKOS)
+    )
+  )
 }
 
-// ECP5 PLL: 25 MHz → 125 MHz, 100 MHz, 100 MHz (90 deg)
+// ECP5 PLL: 25 MHz → 125 MHz, 100 MHz, 100 MHz (-90 deg)
 // VCO = (CLKI / CLKI_DIV) * CLKFB_DIV * CLKOP_DIV = 25 * 5 * 4 = 500 MHz
 // CLKOP  = VCO / 4 = 125 MHz
 // CLKOS  = VCO / 5 = 100 MHz
-// CLKOS2 = VCO / 5 = 100 MHz
+// CLKOS2 = VCO / 5 = 100 MHz (-90 deg)
 protected case class EHXPLLL() extends BlackBox {
   val io = new Bundle {
     val CLKI = in Bool ()
@@ -58,11 +79,11 @@ protected case class EHXPLLL() extends BlackBox {
 
   addGeneric("CLKOS_ENABLE", "ENABLED")
   addGeneric("CLKOS_DIV", 5)
-  addGeneric("CLKOS_CPHASE", 2)
+  addGeneric("CLKOS_CPHASE", 3)
   addGeneric("CLKOS_FPHASE", 0)
 
   addGeneric("CLKOS2_ENABLE", "ENABLED")
   addGeneric("CLKOS2_DIV", 5)
-  addGeneric("CLKOS2_CPHASE", 3)
-  addGeneric("CLKOS2_FPHASE", 2)
+  addGeneric("CLKOS2_CPHASE", 1)
+  addGeneric("CLKOS2_FPHASE", 6) // (3.0 - 1.75) VCO cycles = 1.25 cycle shift forward = -90 deg
 }

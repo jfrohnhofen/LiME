@@ -24,18 +24,10 @@ abstract class Controller extends Component {
 
   def universes: Seq[UniverseConfig] = this.children.collect { case m: Output => m }.flatMap(_.universes).toSeq
 
-  // PLL: 25 MHz board clock → 125 MHz system clock
-  private val pll = Pll()
-  pll.io.clk := ClockDomain.current.readClockWire
+  private val clocks = Clocking()
+  clocks.io.clk := ClockDomain.current.readClockWire
 
-  protected val systemClock = ClockDomain(
-    clock = pll.io.clk_125Mhz,
-    reset = !pll.io.lock,
-    config = ClockDomainConfig(resetKind = ASYNC),
-    frequency = FixedFrequency(125 MHz)
-  )
-
-  protected val bridge = new ClockingArea(systemClock) {
+  protected val bridge = new ClockingArea(clocks.network) {
     val path0 = BridgePath()
     val path1 = BridgePath()
   }
@@ -53,7 +45,7 @@ abstract class Controller extends Component {
     println(s"MAC address: $mac")
     println(s"universes: ${universes.map(_.id).mkString(", ")}")
 
-    new ClockingArea(systemClock) {
+    new ClockingArea(clocks.network) {
 
       // Global timeout tick counter (~1ms resolution at 125 MHz)
       /*val prescaler = Reg(UInt(17 bits)) init 0

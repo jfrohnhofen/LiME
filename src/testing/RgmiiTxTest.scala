@@ -36,16 +36,10 @@ class RgmiiTxTest extends Component {
     0x9b, 0xf8, 0x2c, 0x5b
   )
 
-  // PLL: 25 MHz system clock → 125 MHz TX clock
-  val pll = Pll()
-  pll.io.clk := ClockDomain.current.readClockWire
+  val clocks = Clocking()
+  clocks.io.clk := ClockDomain.current.readClockWire
 
-  val txClockDomain = ClockDomain(
-    clock = pll.io.clk_125Mhz,
-    config = ClockDomainConfig(resetKind = BOOT)
-  )
-
-  new ClockingArea(txClockDomain) {
+  new ClockingArea(clocks.network) {
     val tx = new RgmiiTx()
     tx.io.rgmii <> io.phy0
 

@@ -26,7 +26,7 @@ case class Ipv4Rx() extends Component {
     val output = master(Packet())
   }
 
-  val header = Reg(Ipv4Header()) init Ipv4Header().getZero
+  val header = Reg(Ipv4Header())
   val byteIdx = Reg(UInt(6 bits)) init 0
   val headerLen = Reg(UInt(6 bits)) init PAYLOAD_OFFSET
 

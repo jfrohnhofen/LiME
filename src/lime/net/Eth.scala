@@ -24,7 +24,7 @@ case class EthRx() extends Component {
     val output = master(Packet())
   }
 
-  val header = Reg(EthHeader()) init (EthHeader().getZero)
+  val header = Reg(EthHeader())
   val byteIdx = Reg(UInt(4 bits)) init 0
   val skipCount = Reg(UInt(2 bits)) init 0
 

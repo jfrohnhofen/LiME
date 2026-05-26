@@ -55,7 +55,7 @@ case class SacnRx() extends Component {
     val output = master(Packet())
   }
 
-  val header = Reg(SacnHeader()) init SacnHeader().getZero
+  val header = Reg(SacnHeader())
   val byteIdx = Reg(UInt(10 bits)) init 0
 
   // Cleared on any protocol violation; reset to True at the first byte of each new packet

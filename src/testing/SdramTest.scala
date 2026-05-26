@@ -45,27 +45,6 @@ object M12L64322A {
   )
 }
 
-// 100MHz PLL with adjustable phase shift
-case class Pll25to100(phaseShift: Int = 11) extends BlackBox {
-  val io = new Bundle {
-    val CLKI = in Bool ()
-    val CLKFB = in Bool ()
-    val CLKOP = out Bool ()
-    val CLKOS = out Bool ()
-    val LOCK = out Bool ()
-    val RST = in Bool ()
-  }
-  noIoPrefix()
-  setDefinitionName("EHXPLLL")
-
-  addGeneric("CLKI_DIV", 1)
-  addGeneric("CLKFB_DIV", 4)
-  addGeneric("CLKOP_DIV", 6)
-  addGeneric("CLKOS_DIV", 6)
-  addGeneric("CLKOS_CPHASE", phaseShift)
-  addGeneric("FEEDBK_PATH", "CLKOP")
-}
-
 class SdramTest extends Component {
   val io = new Bundle {
     val clk = in Bool ()
@@ -81,22 +60,11 @@ class SdramTest extends Component {
   }
   noIoPrefix()
 
-  // 100MHz PLL with -90 degree shift (approx)
-  val pll = Pll25to100(phaseShift = 11)
-  pll.io.CLKI := io.clk
-  pll.io.CLKFB := pll.io.CLKOP
-  pll.io.RST := False
+  val clocks = Clocking()
+  clocks.io.clk := io.clk
+  io.sdram_CLK := clocks.io.sdramClk
 
-  val sysClockDomain = ClockDomain(
-    clock = pll.io.CLKOP,
-    reset = !pll.io.LOCK,
-    config = ClockDomainConfig(resetKind = ASYNC),
-    frequency = FixedFrequency(100 MHz)
-  )
-
-  io.sdram_CLK := pll.io.CLKOS
-
-  val system = new ClockingArea(sysClockDomain) {
+  val system = new ClockingArea(clocks.system) {
     val ctrl = SdramCtrl(
       M12L64322A.layout,
       M12L64322A.timings,
