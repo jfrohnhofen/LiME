@@ -45,24 +45,32 @@ object M12L64322A {
   )
 }
 
+case class Sdram() extends Bundle with IMasterSlave {
+  val addr = Bits(11 bits)
+  val ba = Bits(2 bits)
+  val dq = Analog(Bits(32 bits))
+  val ras_n = Bool()
+  val cas_n = Bool()
+  val we_n = Bool()
+  val clk = Bool()
+
+  override def asMaster(): Unit = {
+    out(addr, ba, ras_n, cas_n, we_n, clk)
+    inout(dq)
+  }
+}
+
 class SdramTest extends Component {
   val io = new Bundle {
     val clk = in Bool ()
     val led_n = out Bool ()
-
-    val sdram_ADDR = out Bits (11 bits)
-    val sdram_BA = out Bits (2 bits)
-    val sdram_DQ = inout(Analog(Bits(32 bits)))
-    val sdram_RASn = out Bool ()
-    val sdram_CASn = out Bool ()
-    val sdram_WEn = out Bool ()
-    val sdram_CLK = out Bool ()
+    val sdram = master(Sdram())
   }
   noIoPrefix()
 
   val clocks = Clocking()
   clocks.io.clk := io.clk
-  io.sdram_CLK := clocks.io.sdramClk
+  io.sdram.clk := clocks.io.sdramClk
 
   val system = new ClockingArea(clocks.system) {
     val ctrl = SdramCtrl(
@@ -79,18 +87,18 @@ class SdramTest extends Component {
     ctrl.io.bus.cmd.mask := 0xf
     ctrl.io.bus.rsp.ready := True
 
-    io.sdram_ADDR := ctrl.io.sdram.ADDR
-    io.sdram_BA := ctrl.io.sdram.BA
-    io.sdram_RASn := ctrl.io.sdram.RASn
-    io.sdram_CASn := ctrl.io.sdram.CASn
-    io.sdram_WEn := ctrl.io.sdram.WEn
+    io.sdram.addr := ctrl.io.sdram.ADDR
+    io.sdram.ba := ctrl.io.sdram.BA
+    io.sdram.ras_n := ctrl.io.sdram.RASn
+    io.sdram.cas_n := ctrl.io.sdram.CASn
+    io.sdram.we_n := ctrl.io.sdram.WEn
 
     for (i <- 0 until 32) {
       val bb = BB()
       bb.io.I := ctrl.io.sdram.DQ.write(i)
       bb.io.T := !ctrl.io.sdram.DQ.writeEnable(i)
       ctrl.io.sdram.DQ.read(i) := bb.io.O
-      bb.io.B <> io.sdram_DQ(i)
+      bb.io.B <> io.sdram.dq(i)
     }
 
     val testPass = Reg(Bool()) init False

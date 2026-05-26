@@ -13,10 +13,7 @@ case class Packet() extends Bundle with IMasterSlave {
 
   override def asMaster(): Unit = {
     master(payload)
-    out(eth)
-    out(ip)
-    out(udp)
-    out(sacn)
+    out(eth, ip, udp, sacn)
   }
 
   def throwWhen(cond: Bool): Packet = {
