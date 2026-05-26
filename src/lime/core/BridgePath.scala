@@ -4,6 +4,7 @@ import lime.net._
 import lime.util._
 import spinal.core._
 import spinal.lib._
+import spinal.lib.com.uart._
 
 case class BridgePath() extends Component {
   val io = new Bundle {
@@ -56,9 +57,17 @@ case class BridgePath() extends Component {
   val sniffer = FrameSniffer(4096)
   sniffer.io.tap <-< sacn.io.output.payload
 
-  val uartTx = UartTx(1_000_000)
-  uartTx.io.write << sniffer.io.output
-  io.uart := uartTx.io.tx
+  val uartCtrl = UartCtrl(
+    UartCtrlInitConfig(
+      baudrate = 1_562_500,
+      dataLength = 7,
+      parity = UartParityType.NONE,
+      stop = UartStopType.ONE
+    )
+  )
+  uartCtrl.io.uart.rxd := True
+  uartCtrl.io.write <-< sniffer.io.output
+  io.uart := uartCtrl.io.uart.txd
 
 //  val writer = Writer(pathId)
 //  writer.io.input.valid := sacn.io.output.valid

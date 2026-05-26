@@ -5,6 +5,7 @@ import lime.util._
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.com.uart._
 
 class RgmiiRxTest extends Component {
   val io = new Bundle {
@@ -24,7 +25,15 @@ class RgmiiRxTest extends Component {
   )
   fifo.io.push << rx.io.output
 
-  val uart = UartTx(baudRate = 1_000_000)
-  uart.io.write << fifo.io.pop.map(_.fragment)
-  io.uart := uart.io.tx
+  val uartCtrl = UartCtrl(
+    UartCtrlInitConfig(
+      baudrate = 1_562_500,
+      dataLength = 7,
+      parity = UartParityType.NONE,
+      stop = UartStopType.ONE
+    )
+  )
+  uartCtrl.io.uart.rxd := True
+  uartCtrl.io.write << fifo.io.pop.map(_.fragment)
+  io.uart := uartCtrl.io.uart.txd
 }

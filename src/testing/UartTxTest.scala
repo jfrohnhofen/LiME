@@ -4,6 +4,7 @@ import lime.util._
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.com.uart._
 
 class UartTxTest extends Component {
   val io = new Bundle {
@@ -11,12 +12,20 @@ class UartTxTest extends Component {
   }
   noIoPrefix()
 
-  val uartTx = UartTx(baudRate = 1_000_000)
-  io.uart := uartTx.io.tx
+  val uartCtrl = UartCtrl(
+    UartCtrlInitConfig(
+      baudrate = 1_562_500,
+      dataLength = 7,
+      parity = UartParityType.NONE,
+      stop = UartStopType.ONE
+    )
+  )
+  uartCtrl.io.uart.rxd := True
+  io.uart := uartCtrl.io.uart.txd
 
   // Send incrementing bytes continuously
   val counter = Reg(UInt(8 bits)) init 0
-  uartTx.io.write.valid := True
-  uartTx.io.write.payload := counter.asBits
-  when(uartTx.io.write.fire) { counter := counter + 1 }
+  uartCtrl.io.write.valid := True
+  uartCtrl.io.write.payload := counter.asBits
+  when(uartCtrl.io.write.fire) { counter := counter + 1 }
 }
