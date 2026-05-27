@@ -12,14 +12,7 @@ class UartTxTest extends Component {
   }
   noIoPrefix()
 
-  val uartCtrl = UartCtrl(
-    UartCtrlInitConfig(
-      baudrate = 1_562_500,
-      dataLength = 7,
-      parity = UartParityType.NONE,
-      stop = UartStopType.ONE
-    )
-  )
+  val uartCtrl = UartCtrl(uartConfig)
   uartCtrl.io.uart.rxd := True
   io.uart := uartCtrl.io.uart.txd
 

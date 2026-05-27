@@ -25,14 +25,7 @@ class RgmiiRxTest extends Component {
   )
   fifo.io.push << rx.io.output
 
-  val uartCtrl = UartCtrl(
-    UartCtrlInitConfig(
-      baudrate = 1_562_500,
-      dataLength = 7,
-      parity = UartParityType.NONE,
-      stop = UartStopType.ONE
-    )
-  )
+  val uartCtrl = UartCtrl(uartConfig)
   uartCtrl.io.uart.rxd := True
   uartCtrl.io.write << fifo.io.pop.map(_.fragment)
   io.uart := uartCtrl.io.uart.txd
