@@ -62,7 +62,8 @@ object `package` extends ScalaModule with ScalafmtModule {
       "--top", simpleName,
       "--json", synthFile,
       "--textcfg", cfgFile,
-      "--lpf", lpfFile
+      "--lpf", lpfFile,
+      "--placer-heap-timingweight", "45"
     ).call(cwd = Task.dest)
 
     PathRef(cfgFile)

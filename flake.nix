@@ -29,6 +29,7 @@
             gtkwave
             verilator
             iperf3
+            pre-commit
           ];
         };
       }

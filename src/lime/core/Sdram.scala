@@ -55,7 +55,7 @@ class SdramCtrl[T <: Data](contextType: T = NoData()) extends Component {
   }
 }
 
-protected object M12L64322A {
+object M12L64322A {
   val layout = SdramLayout(
     generation = SdramGeneration.SDR,
     bankWidth = 2,
